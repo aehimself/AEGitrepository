@@ -12,6 +12,21 @@ There are two external components you need to make use of TAEGitRepository.
 I am NOT a C developer. Most of the code here was translated to Delphi from StackOverflow and other sources. They can misbehave, they can cease to function in your usage case. Use at your own risk.
 UNC repositories will probably fail to authenticate. Map them as drives to make them work.
 
+## In theory what is supported
+- Rebasing a branch on any local/remote branch. Also includes aborting and continuing previous rebases.
+- Checking out an other branch, detecting actual branch name
+- Listing available local and remote branches
+- Get incoming (pull) / outgoing (push) commit count
+- Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
+- Commiting staged changes
+- Getting a list of files changed and their statuses
+- Fetch
+- Pusing local commits to remote, updating remote HEAD
+- Reverting last x commits (git reset --soft HEAD~x)
+- (Un)Staging a file for commit
+- Stash list, push, pop, drop
+- Event handler to log all executed calls to git2.dll and their results
+
 ## Usage:
 
 ```delphi
