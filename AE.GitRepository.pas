@@ -24,14 +24,14 @@ Type
     _repodir: String;
     _settings: TAEGitRepositorySettings;
     Procedure DoRebase(Const inRebase: Pgit_rebase; Const inSignature: Pgit_signature);
-    Procedure SetCurrentBranch(Const inBranchName: String);
+    Procedure SetCurrentBranch(inBranchName: String);
     Procedure SetRepoDir(Const inRepoDir: String);
     Function GetBranchList: TArray<String>;
   strict protected
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure OpenGitRepository;
-    Procedure UpdateCommitCount;
+    Procedure UpdateCommitCount(Const inRemote: String);
     Procedure UpdateCurrentBranchName;
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function HandleGitLibOutput(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
@@ -39,8 +39,9 @@ Type
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Procedure CommitStagedFiles(Const inCommitMessage: String);
+    Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
-    Procedure Fetch;
+    Procedure Fetch(Const inRemote: String = 'origin');
     Procedure PushCommitsToRemote(Const inRemote: String = 'origin');
     Procedure Rebase(Const inRemote: String = 'origin'; inBranch: String = '');
     Procedure Rebase_Abort;
@@ -328,25 +329,25 @@ Begin
   End;
 End;
 
-Procedure TAEGitRepository.UpdateCommitCount;
+Procedure TAEGitRepository.UpdateCommitCount(Const inRemote: String);
 Var
   localoid, remoteoid: git_oid;
   ahead, behind: size_t;
 Begin
-  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, 'refs/heads/master'));
-  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, 'refs/remotes/origin/master'));
+  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
+  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))));
   HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
 
   _incomingcommits := behind;
   _outgoingcommits := ahead;
 End;
 
-Procedure TAEGitRepository.Fetch;
+Procedure TAEGitRepository.Fetch(Const inRemote: String = 'origin');
 Var
   remote: Pgit_remote;
   options: git_fetch_options;
 Begin
-  HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, 'origin'));
+  HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
     HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, 1));
     options.callbacks.payload := @_authmethod;
@@ -359,21 +360,62 @@ Begin
     DoGitLibCall('git_remote_free');
   end;
 
-  Self.UpdateCommitCount;
+  Self.UpdateCommitCount(inRemote);;
 End;
 
-Procedure TAEGitRepository.SetCurrentBranch(Const inBranchName: string);
+Procedure TAEGitRepository.SetCurrentBranch(inBranchName: String);
 Var
   options: git_checkout_options;
   obj: Pgit_object;
+  localbranch, remotebranch: Pgit_reference;
+  commit: Pgit_annotated_commit;
+  remote: String;
 Begin
   If _currentbranch = inBranchName Then
     Exit;
 
+  If inBranchName.Contains('/') Then
+  Begin
+    remote := inBranchName.Substring(0, inBranchName.IndexOf('/'));
+
+    inBranchName := inBranchName.Substring(inBranchName.IndexOf('/') + 1);
+  End
+  Else
+    remote := 'origin';
+
   HandleGitLibOutput('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
   options.checkout_strategy := GIT_CHECKOUT_SAFE;
 
-  HandleGitLibOutput('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
+  // Try local branch first
+  If Not HandleGitLibOutput('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))), False) Then
+  Begin
+    HandleGitLibOutput('git_reference_lookup', git_reference_lookup(@remotebranch, _repo, PAnsiChar(UTF8String('refs/remotes/' + remote + '/' + inBranchName))));
+    Try
+      HandleGitLibOutput('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@commit, _repo, remotebranch));
+      Try
+        HandleGitLibOutput('git_branch_create_from_annotated', git_branch_create_from_annotated(@localbranch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, 0));
+        Try
+          HandleGitLibOutput('git_branch_set_upstream', git_branch_set_upstream(localbranch, PAnsiChar(UTF8String(remote + '/' + inBranchName))));
+        Finally
+          git_reference_free(localbranch);
+
+          DoGitLibCall('git_reference_free');
+        End;
+      Finally
+        git_annotated_commit_free(commit);
+
+        DoGitLibCall('git_annotated_commit_free');
+      End;
+    Finally
+      git_reference_free(remotebranch);
+
+      DoGitLibCall('git_reference_free');
+    End;
+
+    // Now lookup the newly-created local branch
+    HandleGitLibOutput('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
+  End;
+
   Try
     HandleGitLibOutput('git_checkout_tree', git_checkout_tree(_repo, obj, @options));
   Finally
@@ -529,6 +571,20 @@ Begin
   _ongitlibcall := nil;
   _repo := nil;
   _repodir := '';
+End;
+
+Procedure TAEGitRepository.DeleteBranch(Const inBranchName: String);
+Var
+  branch: Pgit_reference;
+Begin
+  HandleGitLibOutput('git_branch_lookup', git_branch_lookup(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), GIT_BRANCH_LOCAL));
+  Try
+    HandleGitLibOutput('git_branch_delete', git_branch_delete(branch));
+  Finally
+    git_reference_free(branch);
+
+    DoGitLibCall('git_reference_free');
+  End;
 End;
 
 Destructor TAEGitRepository.Destroy;
