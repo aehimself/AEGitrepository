@@ -36,9 +36,8 @@ Const
   AEGITERRORCODESTR: Array[TAEGitErrorCode] Of String = ('OK', 'Error', 'Not found', 'Object already exists',
     'Multiple matches found', 'Buffer too small', 'Unknown');
 
-  AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'Staged new', 'Staged modified', 'Staged deleted',
-    'Staged renamed', 'Staged type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable',
-     'Ignored', 'Conflicted', 'Unknown');
+  AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'New', 'Modified', 'Deleted', 'Renamed',
+    'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted', 'Unknown');
 
 Implementation
 

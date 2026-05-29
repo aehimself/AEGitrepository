@@ -31,9 +31,11 @@ Type
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure OpenGitRepository;
+    Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Procedure UpdateCommitCount(Const inRemote: String);
     Procedure UpdateCurrentBranchName;
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
+    Function GetDefaultRemoteName: String;
     Function HandleGitLibOutput(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
   public
     Constructor Create; ReIntroduce; Virtual;
@@ -41,9 +43,9 @@ Type
     Procedure CommitStagedFiles(Const inCommitMessage: String);
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
-    Procedure Fetch(Const inRemote: String = 'origin');
-    Procedure PushCommitsToRemote(Const inRemote: String = 'origin');
-    Procedure Rebase(Const inRemote: String = 'origin'; inBranch: String = '');
+    Procedure Fetch(inRemote: String = '');
+    Procedure PushCommitsToRemote(inRemote: String = '');
+    Procedure Rebase(inBranch: String = '');
     Procedure Rebase_Abort;
     Procedure Rebase_Continue;
     Procedure RevertFileModifications(Const inFileName: String);
@@ -342,11 +344,14 @@ Begin
   _outgoingcommits := ahead;
 End;
 
-Procedure TAEGitRepository.Fetch(Const inRemote: String = 'origin');
+Procedure TAEGitRepository.Fetch(inRemote: String = '');
 Var
   remote: Pgit_remote;
   options: git_fetch_options;
 Begin
+  If inRemote.IsEmpty Then
+    inRemote := Self.GetDefaultRemoteName;
+
   HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
     HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, 1));
@@ -360,7 +365,7 @@ Begin
     DoGitLibCall('git_remote_free');
   end;
 
-  Self.UpdateCommitCount(inRemote);;
+  Self.UpdateCommitCount(inRemote);
 End;
 
 Procedure TAEGitRepository.SetCurrentBranch(inBranchName: String);
@@ -374,14 +379,7 @@ Begin
   If _currentbranch = inBranchName Then
     Exit;
 
-  If inBranchName.Contains('/') Then
-  Begin
-    remote := inBranchName.Substring(0, inBranchName.IndexOf('/'));
-
-    inBranchName := inBranchName.Substring(inBranchName.IndexOf('/') + 1);
-  End
-  Else
-    remote := 'origin';
+  SplitBranchName(inBranchName, remote);
 
   HandleGitLibOutput('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
   options.checkout_strategy := GIT_CHECKOUT_SAFE;
@@ -431,13 +429,26 @@ Begin
 End;
 
 Function TAEGitRepository.AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
+Var
+  sshuser: PAnsiChar;
+  sshpass: PAnsiChar;
 Begin
   If (atSSHKey In inAllowedTypes) And _settings.UseSSHKeyAuth Then
   Begin
-    Result := git_credential_ssh_key_new(outGitCredential, PAnsiChar(UTF8String(_settings.UserName)),
+    If Not _settings.UserName.IsEmpty Then
+      sshuser := PAnsiChar(UTF8String(_Settings.UserName))
+    Else
+      sshuser := inUsername;
+
+    If Not _settings.Password.IsEmpty Then
+      sshpass := PAnsiChar(UTF8String(_settings.Password))
+    Else
+      sshpass := nil;
+
+    Result := git_credential_ssh_key_new(outGitCredential, sshuser,
                                       PAnsiChar(UTF8String(_settings.SSHPublicKey)),
                                       PAnsiChar(UTF8String(_settings.SSHPrivateKey)),
-                                      PAnsiChar(UTF8String(_settings.Password)));
+                                      sshpass);
 
     DoGitLibCall('git_credential_ssh_key_new');
   End
@@ -713,6 +724,21 @@ Begin
   End;
 End;
 
+Function TAEGitRepository.GetDefaultRemoteName: String;
+Var
+  remotes: git_strarray;
+Begin
+  HandleGitLibOutput('git_remote_list', git_remote_list(@remotes, _repo));
+  Try
+    If remotes.Count > 0 Then
+      result := String(UTF8String(remotes.strings^));
+  Finally
+    git_strarray_dispose(@remotes);
+
+    DoGitLibCall('git_strarray_dispose');
+  End;
+End;
+
 Procedure TAEGitRepository.OpenGitRepository;
 Begin
   If Assigned(_repo) Then
@@ -723,7 +749,7 @@ Begin
   Self.UpdateCurrentBranchName;
 End;
 
-Procedure TAEGitRepository.PushCommitsToRemote(Const inRemote: String = 'origin');
+Procedure TAEGitRepository.PushCommitsToRemote(inRemote: String = '');
 Var
   options: git_push_options;
   remote: Pgit_remote;
@@ -732,6 +758,9 @@ Var
   localref, remoteref: Pgit_reference;
   oid: Pgit_oid;
 Begin
+  If inRemote.IsEmpty Then
+    inRemote := Self.GetDefaultRemoteName;
+
   HandleGitLibOutput('git_push_options_init', git_push_options_init(@options, GIT_PUSH_OPTIONS_VERSION));
   options.callbacks.payload := @_authmethod;
   options.callbacks.credentials := GitLibAuthCallback;
@@ -784,16 +813,19 @@ Begin
   End;
 End;
 
-Procedure TAEGitRepository.Rebase(Const inRemote: String = 'origin'; inBranch: String = '');
+Procedure TAEGitRepository.Rebase(inBranch: String = '');
 Var
+  remote: String;
   options: git_rebase_options;
   head, ref: Pgit_reference;
   branch, onto: Pgit_annotated_commit;
   rebase: Pgit_rebase;
   signature: Pgit_signature;
 Begin
+  SplitBranchName(inBranch, remote);
+
   If inBranch.IsEmpty Then
-    inBranch := inRemote + '/' + _currentbranch;
+    inBranch := remote + '/' + _currentbranch;
 
   HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
   Try
@@ -850,6 +882,18 @@ Begin
   _repodir := inRepoDir;
 
   Self.OpenGitRepository;
+End;
+
+Procedure TAEGitRepository.SplitBranchName(Var outBranchName: String; Var outRemote: String);
+Begin
+  If outBranchName.Contains('/') Then
+  Begin
+    outRemote := outBranchName.Substring(0, outBranchName.IndexOf('/'));
+
+    outBranchName := outBranchName.Substring(outBranchName.IndexOf('/') + 1);
+  End
+  Else
+    outRemote := Self.GetDefaultRemoteName;
 End;
 
 Procedure TAEGitRepository.CommitStagedFiles(Const inCommitMessage: String);
