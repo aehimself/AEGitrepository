@@ -24,20 +24,20 @@ Type
   TGitLibAuthCallback = Function(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer Of Object;
 
   TAEGitFileStatus = ( gfsCurrent, gfsStagedNew, gfsStagedModified, gfsStagedDeleted, gfsStagedRenamed, gfsStagedTypeChange,
-    gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted, gfsUnknown );
+    gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted );
 
   TAEGitStashList = Class(TDictionary<Integer, String>);
 
   PAEGitStashList = ^TAEGitStashList;
 
-  TAEGitChangedFileList = Class(TDictionary<String, TAEGitFileStatus>);
+  TAEGitChangedFileList = Class(TDictionary<String, TArray<TAEGitFileStatus>>);
 
 Const
   AEGITERRORCODESTR: Array[TAEGitErrorCode] Of String = ('OK', 'Error', 'Not found', 'Object already exists',
     'Multiple matches found', 'Buffer too small', 'Unknown');
 
   AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'New', 'Modified', 'Deleted', 'Renamed',
-    'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted', 'Unknown');
+    'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted');
 
 Implementation
 

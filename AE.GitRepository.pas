@@ -436,7 +436,7 @@ Begin
   If (atSSHKey In inAllowedTypes) And _settings.UseSSHKeyAuth Then
   Begin
     If Not _settings.UserName.IsEmpty Then
-      sshuser := PAnsiChar(UTF8String(_Settings.UserName))
+      sshuser := PAnsiChar(UTF8String(_settings.UserName))
     Else
       sshuser := inUsername;
 
@@ -454,6 +454,16 @@ Begin
   End
   Else If atPlainText In inAllowedTypes Then
   Begin
+    If Not _settings.UserName.IsEmpty Then
+      sshuser := PAnsiChar(UTF8String(_settings.UserName))
+    Else
+      sshuser := nil;
+
+    If Not _settings.Password.IsEmpty Then
+      sshpass := PAnsiChar(UTF8String(_settings.Password))
+    Else
+      sshpass := nil;
+
     Result := git_credential_userpass_plaintext_new(outGitCredential, PAnsiChar(UTF8String(_settings.UserName)), PAnsiChar(UTF8String(_settings.Password)));
 
     DoGitLibCall('git_credential_userpass_plaintext_new');
@@ -655,12 +665,28 @@ Var
   options: git_status_options;
   count, b: Integer;
   status: Pgit_status_entry;
-  filename: String;
-  filestatus: TAEGitFileStatus;
+
+  Procedure AddFileStatus(Const inFileName: String; Const inStatus: TAEGitFileStatus);
+  Var
+    statuses: TArray<TAEGitFileStatus>;
+    len: Integer;
+  Begin
+    If inChangedFiles.TryGetValue(inFileName, statuses) Then
+    Begin
+      len := Length(statuses);
+      SetLength(statuses, len + 1);
+      statuses[len] := inStatus;
+
+      inChangedFiles[inFileName] := statuses;
+    End
+    Else
+      inChangedFiles.Add(inFileName, [inStatus]);
+  end;
+
 Begin
   HandleGitLibOutput('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
 
-  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED;
+  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
 
   HandleGitLibOutput('git_status_list_new', git_status_list_new(@statuslist, _repo, @options));
   Try
@@ -674,48 +700,64 @@ Begin
 
       DoGitLibCall('git_status_byindex');
 
-      If status.status <> GIT_STATUS_IGNORED Then
-      Begin
-        If Assigned(status.head_to_index) Then
-          filename := String(UTF8String(status.head_to_index.old_file.path))
-        Else If Assigned(status.index_to_workdir) Then
-          filename := String(UTF8String(status.index_to_workdir.old_file.path));
+      If status.status = GIT_STATUS_IGNORED Then
+        Continue;
 
-        Case status.status of
-          GIT_STATUS_CURRENT:
-            filestatus := gfsCurrent;
-          GIT_STATUS_INDEX_NEW:
-            filestatus := gfsStagedNew;
-          GIT_STATUS_INDEX_MODIFIED:
-            filestatus := gfsStagedModified;
-          GIT_STATUS_INDEX_DELETED:
-            filestatus := gfsStagedDeleted;
-          GIT_STATUS_INDEX_RENAMED:
-            filestatus := gfsStagedRenamed;
-          GIT_STATUS_INDEX_TYPECHANGE:
-            filestatus := gfsStagedTypeChange;
-          GIT_STATUS_WT_NEW:
-            filestatus := gfsNew;
-          GIT_STATUS_WT_MODIFIED:
-            filestatus := gfsModified;
-          GIT_STATUS_WT_DELETED:
-            filestatus := gfsDeleted;
-          GIT_STATUS_WT_TYPECHANGE:
-            filestatus := gfsTypeChange;
-          GIT_STATUS_WT_RENAMED:
-            filestatus := gfsRenamed;
-          GIT_STATUS_WT_UNREADABLE:
-            filestatus := gfsUnreadable;
-          GIT_STATUS_IGNORED:
-            filestatus := gfsIgnored;
-          GIT_STATUS_CONFLICTED:
-            filestatus := gfsConflicted;
-          Else
-            filestatus := gfsUnknown;
-        End;
+      If (status.status And GIT_STATUS_INDEX_NEW) <> 0 Then
+        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew);
 
-        inChangedFiles.Add(filename, filestatus);
-      End;
+      If (status.status And GIT_STATUS_INDEX_MODIFIED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified);
+
+      If (status.status And GIT_STATUS_INDEX_DELETED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted);
+
+      // TODO: During rename we might want to know the old name as well...
+      If (status.status And GIT_STATUS_INDEX_RENAMED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed);
+
+      If (status.status And GIT_STATUS_INDEX_TYPECHANGE) <> 0 Then
+        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange);
+
+      If (status.status And GIT_STATUS_WT_NEW) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew);
+
+      If (status.status And GIT_STATUS_WT_MODIFIED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified);
+
+      If (status.status And GIT_STATUS_WT_DELETED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted);
+
+      // TODO: During rename we might want to know the old name as well...
+      If (status.status And GIT_STATUS_WT_RENAMED) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed);
+
+      If (status.status And GIT_STATUS_WT_TYPECHANGE) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange);
+
+      If (status.status And GIT_STATUS_WT_UNREADABLE) <> 0 Then
+        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable);
+
+      If (status.status And GIT_STATUS_CONFLICTED) <> 0 Then
+        If Assigned(status.index_to_workdir) Then
+          AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted)
+        Else
+          AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted);
+
+      If status.status = GIT_STATUS_CURRENT Then
+        If Assigned(status.index_to_workdir) Then
+          AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent)
+        Else
+          AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent);
+
+      // This part is not needed as we are filtering this status out, but it might be needed in
+      // the future...
+      //
+      // If status.status = GIT_STATUS_IGNORED Then
+      //   If Assigned(status.index_to_workdir) Then
+      //     AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsIgnored)
+      //   Else
+      //     AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsIgnored);
     End;
   Finally
     git_status_list_free(statuslist);
