@@ -331,17 +331,74 @@ Begin
   End;
 End;
 
-Procedure TAEGitRepository.UpdateCommitCount(Const inRemote: String);
+Procedure TAEGitRepository.UpdateCommitCount(const inRemote: string);
 Var
-  localoid, remoteoid: git_oid;
+  localoid, remoteoid, walkoid: git_oid;
   ahead, behind: size_t;
+  walk: Pgit_revwalk;
+  refiterator: Pgit_reference_iterator;
+  ref: Pgit_reference;
+  a: Integer;
 Begin
   HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
-  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))));
-  HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
 
-  _incomingcommits := behind;
-  _outgoingcommits := ahead;
+  If HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))), False) Then
+  Begin
+    // Remote branch exist, use git_graph_ahead_behind
+    HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
+
+    _incomingcommits := behind;
+    _outgoingcommits := ahead;
+  End
+  Else
+  Begin
+    // Remote branch does not exist. There can't be incoming commits, for outgoing count the commits unreachable on
+    // other branches
+    _incomingcommits := -1;
+    _outgoingcommits := 0;
+
+    HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walk, _repo));
+    Try
+      HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walk, @localoid));
+
+      HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
+      Try
+        While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, refiterator), False) Do
+        Begin
+          Try
+            // Skip symbolic refs such as refs/remotes/origin/HEAD
+            a := git_reference_type(ref);
+
+            DoGitLibCall('git_reference_type');
+
+            If a = GIT_REFERENCE_DIRECT Then
+            Begin
+              remoteoid := git_reference_target(Ref)^;
+
+              DoGitLibCall('git_reference_target');
+
+              HandleGitLibOutput('git_revwalk_hide', git_revwalk_hide(walk, @remoteoid));
+            End;
+          Finally
+            git_reference_free(ref);
+
+            DoGitLibCall('git_reference_free');
+          End;
+        End;
+      Finally
+        git_reference_iterator_free(refiterator);
+
+        DoGitLibCall('git_reference_iterator_free');
+      End;
+
+      While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
+        Inc(_outgoingcommits);
+    Finally
+      git_revwalk_free(Walk);
+
+      DoGitLibCall('git_revwalk_free');
+    End;
+  End;
 End;
 
 Procedure TAEGitRepository.Fetch(inRemote: String = '');
