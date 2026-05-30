@@ -104,7 +104,7 @@ Begin
   Result := TGitLibAuthCallback(PMethod(payload)^)(out_, url, username_from_url, types);
 End;
 
-Function GitLibStashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; cdecl;
+Function GitLibStashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
 Begin
   PAEGitStashList(Payload)^.Add(Integer(Index), String(UTF8String(MessageText)));
 
@@ -464,7 +464,7 @@ Begin
     Else
       sshpass := nil;
 
-    Result := git_credential_userpass_plaintext_new(outGitCredential, PAnsiChar(UTF8String(_settings.UserName)), PAnsiChar(UTF8String(_settings.Password)));
+    Result := git_credential_userpass_plaintext_new(outGitCredential, sshuser, sshpass);
 
     DoGitLibCall('git_credential_userpass_plaintext_new');
   End
@@ -796,7 +796,8 @@ Var
   options: git_push_options;
   remote: Pgit_remote;
   callbacks: git_remote_callbacks;
-  refs: Array[0..1] Of PAnsiChar;
+  ref: PAnsiChar;
+  refarray: git_strarray;
   localref, remoteref: Pgit_reference;
   oid: Pgit_oid;
 Begin
@@ -811,14 +812,15 @@ Begin
   callbacks.payload := @_authmethod;
   callbacks.credentials := GitLibAuthCallback;
 
-  refs[0] := PAnsiChar(UTF8String(Format('+refs/heads/%s:refs/heads/%s', [_currentbranch, _currentbranch])));
-  refs[1] := nil;
+  ref := PAnsiChar(UTF8String(Format('+refs/heads/%s:refs/heads/%s', [_currentbranch, _currentbranch])));
+  refarray.strings := @ref;
+  refarray.Count := 1;
 
   HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
     HandleGitLibOutput('git_remote_connect', git_remote_connect(remote, GIT_DIRECTION_PUSH, @callbacks, nil, nil));
     Try
-      HandleGitLibOutput('git_remote_push', git_remote_push(remote, @refs[0], @options));
+      HandleGitLibOutput('git_remote_push', git_remote_push(remote, @refarray, @options));
       HandleGitLibOutput('git_reference_lookup', git_reference_lookup(@localref, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
       Try
         oid := git_reference_target(LocalRef);
