@@ -26,14 +26,12 @@ Type
     Procedure DoRebase(Const inRebase: Pgit_rebase; Const inSignature: Pgit_signature);
     Procedure SetCurrentBranch(inBranchName: String);
     Procedure SetRepoDir(Const inRepoDir: String);
-    Function GetBranchList: TArray<String>;
   strict protected
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure OpenGitRepository;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Procedure UpdateCommitCount(Const inRemote: String);
-    Procedure UpdateCurrentBranchName;
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function GetDefaultRemoteName: String;
     Function HandleGitLibOutput(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
@@ -41,6 +39,7 @@ Type
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Procedure CommitStagedFiles(Const inCommitMessage: String);
+    Procedure CreateBranch(Const inBranchName: String);
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Procedure Fetch(inRemote: String = '');
@@ -56,7 +55,8 @@ Type
     Procedure Stash_Pop(Const inStashIndex: Integer);
     Procedure Stash_Push(Const inStashMessage: String);
     Procedure UnstageFile(Const inFileName: String);
-    Property BranchList: TArray<String> Read GetBranchList;
+    Procedure UpdateCurrentBranchName;
+    Function BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
@@ -67,7 +67,7 @@ Type
 
 Implementation
 
-Uses AE.GitRepository.Exception, System.IOUtils;
+Uses AE.GitRepository.Exception, System.IOUtils, WinApi.Windows;
 
 //
 // LibGit2 callbacks. These can not be procedure / function of objects so in the payload we send the instances own
@@ -80,36 +80,60 @@ Var
 Begin
   types := [];
 
-  If allowed_types And GIT_CREDENTIAL_USERPASS_PLAINTEXT_ = GIT_CREDENTIAL_USERPASS_PLAINTEXT_ Then
-    Include(types, atPlainText);
+  If (allowed_types And GIT_CREDENTIAL_USERPASS_PLAINTEXT_) <> 0 Then
+    Include(types, gaUserPassPlainText);
 
-  If allowed_types And GIT_CREDENTIAL_SSH_KEY_ = GIT_CREDENTIAL_SSH_KEY_ Then
-    Include(types, atSSHKey);
+  If (allowed_types And GIT_CREDENTIAL_SSH_KEY_) <> 0 Then
+    Include(types, gaSshKey);
 
-  If allowed_types And GIT_CREDENTIAL_SSH_CUSTOM_ = GIT_CREDENTIAL_SSH_CUSTOM_ Then
-    Include(types, atSSHCustom);
+  If (allowed_types And GIT_CREDENTIAL_SSH_CUSTOM_) <> 0 Then
+    Include(types, gaSshCustom);
 
-  If allowed_types And GIT_CREDENTIAL_DEFAULT_ = GIT_CREDENTIAL_DEFAULT_ Then
-    Include(types, atDefault);
+  If (allowed_types And GIT_CREDENTIAL_DEFAULT_) <> 0 Then
+    Include(types, gaDefault);
 
-  If allowed_types And GIT_CREDENTIAL_SSH_INTERACTIVE_ = GIT_CREDENTIAL_SSH_INTERACTIVE_ Then
-    Include(types, atSSHInteractive);
+  If (allowed_types And GIT_CREDENTIAL_SSH_INTERACTIVE_) <> 0 Then
+    Include(types, gaSshInteractive);
 
-  If allowed_types And GIT_CREDENTIAL_USERNAME_ = GIT_CREDENTIAL_USERNAME_ Then
-    Include(types, atUserName);
+  If (allowed_types And GIT_CREDENTIAL_USERNAME_) <> 0 Then
+    Include(types, gaUsername);
 
-  If allowed_types And GIT_CREDENTIAL_SSH_MEMORY = GIT_CREDENTIAL_SSH_MEMORY Then
-    Include(types, atSSHMemory);
+  If (allowed_types And GIT_CREDENTIAL_SSH_MEMORY) <> 0 Then
+    Include(types, gaSshMemory);
 
   Result := TGitLibAuthCallback(PMethod(payload)^)(out_, url, username_from_url, types);
 End;
 
 Function GitLibStashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
 Begin
-  PAEGitStashList(Payload)^.Add(Integer(Index), String(UTF8String(MessageText)));
+  If PAEGitStashList(Payload)^.Count <= Int64(Index) Then
+    PAEGitStashList(Payload)^.Count := Int64(Index) + 1;
+
+  PAEGitStashList(Payload)^[Int64(Index)] := String(UTF8String(MessageText));
 
   Result := 0;
 End;
+
+//function GitCertificateCheck(
+//  cert: Pgit_cert;
+//  valid: Integer;
+//  host: PAnsiChar;
+//  payload: Pointer
+//): Integer; cdecl;
+//begin
+//  OutputDebugString(PChar(
+//    Format('Host=%s Valid=%d', [string(host), valid])
+//  ));
+//
+//  case cert^.cert_type of
+//    GIT_CERT_X509_:
+//      OutputDebugString('X509 cert');
+//    GIT_CERT_HOSTKEY_LIBSSH2:
+//      OutputDebugString('SSH host key');
+//  end;
+//
+//  Result := 0;  // accept
+//end;
 
 //
 // TAEGitRepository
@@ -206,9 +230,9 @@ Var
   err: PGit_Error;
   errorcode: TAEGitErrorCode;
 Begin
-  Case inCommandResult of
+  Case inCommandResult Of
     GIT_OK:
-      errorcode := geOK;
+      errorcode := geOk;
     GIT_ERROR:
       errorcode := geError;
     GIT_ENOTFOUND:
@@ -216,9 +240,67 @@ Begin
     GIT_EEXISTS:
       errorcode := geObjectExists;
     GIT_EAMBIGUOUS:
-      errorcode := geMultipleMatches;
+      errorcode := geAmbiguous;
     GIT_EBUFS:
-      errorcode := geBufferTooSmall;
+      errorcode := geBufTooSmall;
+    GIT_EUSER:
+      errorcode := geUser;
+    GIT_EBAREREPO:
+      errorcode := geBareRepo;
+    GIT_EUNBORNBRANCH:
+      errorcode := geUnbornBranch;
+    GIT_EUNMERGED:
+      errorcode := geUnmerged;
+    GIT_ENONFASTFORWARD:
+      errorcode := geNonFastForward;
+    GIT_EINVALIDSPEC:
+      errorcode := geInvalidSpec;
+    GIT_ECONFLICT:
+      errorcode := geConflict;
+    GIT_ELOCKED:
+      errorcode := geLocked;
+    GIT_EMODIFIED:
+      errorcode := geModified;
+    GIT_EAUTH:
+      errorcode := geAuth;
+    GIT_ECERTIFICATE:
+      errorcode := geCertificate;
+    GIT_EAPPLIED:
+      errorcode := geAlreadyApplied;
+    GIT_EPEEL:
+      errorcode := gePeel;
+    GIT_EEOF:
+      errorcode := geEOF;
+    GIT_EINVALID:
+      errorcode := geInvalid;
+    GIT_EUNCOMMITTED:
+      errorcode := geUncommitted;
+    GIT_EDIRECTORY:
+      errorcode := geDirectory;
+    GIT_EMERGECONFLICT:
+      errorcode := geMergeConflict;
+    GIT_PASSTHROUGH:
+      errorcode := gePassthrough;
+    GIT_ITEROVER:
+      errorcode := geIterationOver;
+    GIT_RETRY:
+      errorcode := geRetry;
+    GIT_EMISMATCH:
+      errorcode := geHashMismatch;
+    GIT_EINDEXDIRTY:
+      errorcode := geIndexDirty;
+    GIT_EAPPLYFAIL:
+      errorcode := geApplyFailed;
+    GIT_EOWNER:
+      errorcode := geWrongOwner;
+    GIT_TIMEOUT:
+      errorcode := geTimeout;
+    GIT_EUNCHANGED:
+      errorcode := geUnchanged;
+    GIT_ENOTSUPPORTED:
+      errorcode := geNotSupported;
+    GIT_EREADONLY:
+      errorcode := geReadOnly;
     Else
       errorcode := geUnknown;
   End;
@@ -267,7 +349,7 @@ Begin
       End;
     End
     Else
-    If HandleGitLibOutput('', git_branch_name(@tmp, ref), False) Then
+    If HandleGitLibOutput('git_branch_name', git_branch_name(@tmp, ref), False) Then
         _currentbranch := String(UTF8String(tmp));
   Finally
     git_reference_free(ref);
@@ -414,6 +496,7 @@ Begin
     HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, 1));
     options.callbacks.payload := @_authmethod;
     options.callbacks.credentials := GitLibAuthCallback;
+//    options.callbacks.certificate_check := GitCertificateCheck;
 
     HandleGitLibOutput('git_remote_fetch', git_remote_fetch(remote, nil, @options, nil));
   finally
@@ -487,40 +570,36 @@ End;
 
 Function TAEGitRepository.AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
 Var
-  sshuser: PAnsiChar;
-  sshpass: PAnsiChar;
+  sshuser, sshpass, pubkey, privkey: PAnsiChar;
 Begin
-  If (atSSHKey In inAllowedTypes) And _settings.UseSSHKeyAuth Then
+  If Not _settings.UserName.IsEmpty Then
+    sshuser := PAnsiChar(UTF8String(_settings.UserName))
+  Else
+    sshuser := inUsername;
+
+  If Not _settings.Password.IsEmpty Then
+    sshpass := PAnsiChar(UTF8String(_settings.Password))
+  Else
+    sshpass := nil;
+
+  If (gaSshKey In inAllowedTypes) And _settings.UseSSHKeyAuth Then
   Begin
-    If Not _settings.UserName.IsEmpty Then
-      sshuser := PAnsiChar(UTF8String(_settings.UserName))
+    If Not _settings.SSHPublicKey.IsEmpty Then
+      pubkey := PAnsiChar(UTF8String(_settings.SSHPublicKey))
     Else
-      sshuser := inUsername;
+      pubkey := nil;
 
-    If Not _settings.Password.IsEmpty Then
-      sshpass := PAnsiChar(UTF8String(_settings.Password))
+    If Not _settings.SSHPrivateKey.IsEmpty Then
+      privkey := PAnsiChar(UTF8String(_settings.SSHPrivateKey))
     Else
-      sshpass := nil;
+      privkey := nil;
 
-    Result := git_credential_ssh_key_new(outGitCredential, sshuser,
-                                      PAnsiChar(UTF8String(_settings.SSHPublicKey)),
-                                      PAnsiChar(UTF8String(_settings.SSHPrivateKey)),
-                                      sshpass);
+    Result := git_credential_ssh_key_new(outGitCredential, sshuser, pubkey, privkey, sshpass);
 
     DoGitLibCall('git_credential_ssh_key_new');
   End
-  Else If atPlainText In inAllowedTypes Then
+  Else If gaUserPassPlainText In inAllowedTypes Then
   Begin
-    If Not _settings.UserName.IsEmpty Then
-      sshuser := PAnsiChar(UTF8String(_settings.UserName))
-    Else
-      sshuser := nil;
-
-    If Not _settings.Password.IsEmpty Then
-      sshpass := PAnsiChar(UTF8String(_settings.Password))
-    Else
-      sshpass := nil;
-
     Result := git_credential_userpass_plaintext_new(outGitCredential, sshuser, sshpass);
 
     DoGitLibCall('git_credential_userpass_plaintext_new');
@@ -651,6 +730,32 @@ Begin
   _repodir := '';
 End;
 
+Procedure TAEGitRepository.CreateBranch(Const inBranchName: String);
+Var
+  ref, branch: Pgit_reference;
+  commit: Pgit_commit;
+Begin
+  HandleGitLibOutput('git_repository_head', git_repository_head(@ref, _repo));
+  Try
+    HandleGitLibOutput('git_commit_lookup', git_commit_lookup(@commit, _repo, git_reference_target(ref)));
+    Try
+      HandleGitLibOutput('git_branch_create', git_branch_create(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
+
+      git_reference_free(branch);
+
+      DoGitLibCall('git_reference_free');
+    Finally
+      git_commit_free(Commit);
+
+      DoGitLibCall('git_commit_free');
+    End;
+  Finally
+    git_reference_free(ref);
+
+    DoGitLibCall('git_reference_free');
+  End;
+End;
+
 Procedure TAEGitRepository.DeleteBranch(Const inBranchName: String);
 Var
   branch: Pgit_reference;
@@ -681,19 +786,30 @@ Begin
     _ongitlibcall(Self, inMethod, inErrorCode);
 End;
 
-Function TAEGitRepository.GetBranchList: TArray<String>;
+Function TAEGitRepository.BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;
 Var
   iterator: Pgit_branch_iterator;
   ref: Pgit_reference;
-  branch_type: git_branch_t;
+  branchtypeoutput, branchtypeinput: git_branch_t;
   branchname: PAnsiChar;
 Begin
   SetLength(Result, 0);
 
-  HandleGitLibOutput('git_branch_iterator_new', git_branch_iterator_new(@iterator, _repo, GIT_BRANCH_ALL));
+  Case inBranchType Of
+    gbLocal:
+      branchtypeinput := GIT_BRANCH_LOCAL;
+    gbRemote:
+      branchtypeinput := GIT_BRANCH_REMOTE;
+    gbAll:
+      branchtypeinput := GIT_BRANCH_ALL;
+    Else
+      Raise ENotImplemented.Create('This branch type is not implemented yet!');
+  End;
+
+  HandleGitLibOutput('git_branch_iterator_new', git_branch_iterator_new(@iterator, _repo, branchtypeinput));
   Try
     Repeat
-      If Not HandleGitLibOutput('git_branch_next', git_branch_next(@ref, @branch_type, iterator), False) Then
+      If Not HandleGitLibOutput('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
         Break;
 
       Try
@@ -827,10 +943,12 @@ Function TAEGitRepository.GetDefaultRemoteName: String;
 Var
   remotes: git_strarray;
 Begin
+  Result := '';
+
   HandleGitLibOutput('git_remote_list', git_remote_list(@remotes, _repo));
   Try
     If remotes.Count > 0 Then
-      result := String(UTF8String(remotes.strings^));
+      Result := String(UTF8String(remotes.strings^));
   Finally
     git_strarray_dispose(@remotes);
 
