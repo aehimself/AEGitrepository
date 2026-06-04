@@ -57,6 +57,7 @@ Type
     Procedure UnstageFile(Const inFileName: String);
     Procedure UpdateCurrentBranchName;
     Function BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;
+    Function Rebase_InProgress: Boolean;
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
@@ -229,8 +230,11 @@ Function TAEGitRepository.HandleGitLibOutput(Const inMethod: String; Const inCom
 Var
   err: PGit_Error;
   errorcode: TAEGitErrorCode;
+  errorclass: TAEGitErrorClass;
 Begin
   Case inCommandResult Of
+    1:
+      errorcode := geFalse;
     GIT_OK:
       errorcode := geOk;
     GIT_ERROR:
@@ -315,7 +319,86 @@ Begin
 
     DoGitLibCall('git_error_last');
 
-    Raise EAEGitException.Create(errorcode, inMethod, err.klass, String(UTF8String(err.message)));
+    Case err.klass Of
+      GIT_ERROR_NONE:
+        errorclass := ecNone;
+      GIT_ERROR_NOMEMORY:
+        errorclass := ecNoMemory;
+      GIT_ERROR_OS:
+        errorclass := ecOperatingSystem;
+      GIT_ERROR_INVALID:
+        errorclass := ecInvalid;
+      GIT_ERROR_REFERENCE:
+        errorclass := ecReference;
+      GIT_ERROR_ZLIB:
+        errorclass := ecZlib;
+      GIT_ERROR_REPOSITORY:
+        errorclass := ecRepository;
+      GIT_ERROR_CONFIG:
+        errorclass := ecConfig;
+      GIT_ERROR_REGEX:
+        errorclass := ecRegex;
+      GIT_ERROR_ODB:
+        errorclass := ecObjectDatabase;
+      GIT_ERROR_INDEX:
+        errorclass := ecIndex;
+      GIT_ERROR_OBJECT:
+        errorclass := ecObject;
+      GIT_ERROR_NET:
+        errorclass := ecNetwork;
+      GIT_ERROR_TAG:
+        errorclass := ecTag;
+      GIT_ERROR_TREE:
+        errorclass := ecTree;
+      GIT_ERROR_INDEXER:
+        errorclass := ecIndexer;
+      GIT_ERROR_SSL:
+        errorclass := ecSsl;
+      GIT_ERROR_SUBMODULE:
+        errorclass := ecSubmodule;
+      GIT_ERROR_THREAD:
+        errorclass := ecThread;
+      GIT_ERROR_STASH:
+        errorclass := ecStash;
+      GIT_ERROR_CHECKOUT:
+        errorclass := ecCheckout;
+      GIT_ERROR_FETCHHEAD:
+        errorclass := ecFetchHead;
+      GIT_ERROR_MERGE:
+        errorclass := ecMerge;
+      GIT_ERROR_SSH:
+        errorclass := ecSsh;
+      GIT_ERROR_FILTER:
+        errorclass := ecFilter;
+      GIT_ERROR_REVERT:
+        errorclass := ecRevert;
+      GIT_ERROR_CALLBACK:
+        errorclass := ecCallback;
+      GIT_ERROR_CHERRYPICK:
+        errorclass := ecCherryPick;
+      GIT_ERROR_DESCRIBE:
+        errorclass := ecDescribe;
+      GIT_ERROR_REBASE:
+        errorclass := ecRebase;
+      GIT_ERROR_FILESYSTEM:
+        errorclass := ecFileSystem;
+      GIT_ERROR_PATCH:
+        errorclass := ecPatch;
+      GIT_ERROR_WORKTREE:
+        errorclass := ecWorkTree;
+      GIT_ERROR_SHA:
+        errorclass := ecSha;
+      GIT_ERROR_HTTP:
+        errorclass := ecHttp;
+      GIT_ERROR_INTERNAL:
+        errorclass := ecInternal;
+      GIT_ERROR_GRAFTS:
+        errorclass := ecGrafts;
+      Else
+        errorclass := ecUnknown;
+    End;
+
+    Raise EAEGitException.Create(errorcode, inMethod, errorclass, String(UTF8String(err.message)));
   End;
 End;
 
@@ -419,67 +502,86 @@ Var
   ahead, behind: size_t;
   walk: Pgit_revwalk;
   refiterator: Pgit_reference_iterator;
-  ref: Pgit_reference;
+  ref, headref, remoteref: Pgit_reference;
   a: Integer;
+  remote: PAnsiChar;
 Begin
   HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
 
-  If HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))), False) Then
-  Begin
-    // Remote branch exist, use git_graph_ahead_behind
-    HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
-
-    _incomingcommits := behind;
-    _outgoingcommits := ahead;
-  End
-  Else
-  Begin
-    // Remote branch does not exist. There can't be incoming commits, for outgoing count the commits unreachable on
-    // other branches
-    _incomingcommits := -1;
-    _outgoingcommits := 0;
-
-    HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walk, _repo));
+  HandleGitLibOutput('git_repository_head', git_repository_head(@headref, _repo));
+  Try
+    If HandleGitLibOutput('git_branch_upstream', git_branch_upstream(@remoteref, headref), False) Then
     Try
-      HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walk, @localoid));
+      remote := git_reference_name(remoteref);
 
-      HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
-      Try
-        While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, refiterator), False) Do
-        Begin
-          Try
-            // Skip symbolic refs such as refs/remotes/origin/HEAD
-            a := git_reference_type(ref);
+      DoGitLibCall('git_reference_name');
 
-            DoGitLibCall('git_reference_type');
+      If HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, remote), False) Then
+      Begin
+        // Remote branch exist, use git_graph_ahead_behind
+        HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
 
-            If a = GIT_REFERENCE_DIRECT Then
-            Begin
-              remoteoid := git_reference_target(Ref)^;
-
-              DoGitLibCall('git_reference_target');
-
-              HandleGitLibOutput('git_revwalk_hide', git_revwalk_hide(walk, @remoteoid));
-            End;
-          Finally
-            git_reference_free(ref);
-
-            DoGitLibCall('git_reference_free');
-          End;
-        End;
-      Finally
-        git_reference_iterator_free(refiterator);
-
-        DoGitLibCall('git_reference_iterator_free');
-      End;
-
-      While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
-        Inc(_outgoingcommits);
+        _incomingcommits := behind;
+        _outgoingcommits := ahead;
+      End
     Finally
-      git_revwalk_free(Walk);
+      git_reference_free(remoteref);
 
-      DoGitLibCall('git_revwalk_free');
+      DoGitLibCall('git_reference_free');
+    End
+    Else
+    Begin
+      // Remote branch does not exist. There can't be incoming commits, for outgoing count the commits unreachable on
+      // other branches
+      _incomingcommits := -1;
+      _outgoingcommits := 0;
+
+      HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walk, _repo));
+      Try
+        HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walk, @localoid));
+
+        HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
+        Try
+          While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, refiterator), False) Do
+          Begin
+            Try
+              // Skip symbolic refs such as refs/remotes/origin/HEAD
+              a := git_reference_type(ref);
+
+              DoGitLibCall('git_reference_type');
+
+              If a = GIT_REFERENCE_DIRECT Then
+              Begin
+                remoteoid := git_reference_target(Ref)^;
+
+                DoGitLibCall('git_reference_target');
+
+                HandleGitLibOutput('git_revwalk_hide', git_revwalk_hide(walk, @remoteoid));
+              End;
+            Finally
+              git_reference_free(ref);
+
+              DoGitLibCall('git_reference_free');
+            End;
+          End;
+        Finally
+          git_reference_iterator_free(refiterator);
+
+          DoGitLibCall('git_reference_iterator_free');
+        End;
+
+        While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
+          Inc(_outgoingcommits);
+      Finally
+        git_revwalk_free(Walk);
+
+        DoGitLibCall('git_revwalk_free');
+      End;
     End;
+  Finally
+    git_reference_free(headref);
+
+    DoGitLibCall('git_reference_free');
   End;
 End;
 
@@ -611,7 +713,7 @@ End;
 Procedure TAEGitRepository.CloseGitRepository;
 Begin
   If Not Assigned(_repo) Then
-    Raise EAEGitException.Create(geError, 'git_repository_free', 0, 'The repository is not yet open!');
+    Raise EAEGitException.Create(geError, 'git_repository_free', ecInternal, 'The repository is not yet open!');
 
   git_repository_free(_repo);
 
@@ -660,7 +762,7 @@ Begin
     HandleGitLibOutput('git_repository_index', git_repository_index(@index, _repo));
     Try
       If git_index_has_conflicts(index) <> 0 Then
-        Raise EAEGitException.Create(geError, 'git_index_has_conflicts', 0, 'Commit has conflicts, rebase aborted!');
+        Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
     Finally
       DoGitLibCall('git_index_has_conflicts');
 
@@ -694,6 +796,23 @@ Begin
       DoGitLibCall('git_signature_free');
     End;
   Finally
+    git_rebase_free(rebase);
+
+    DoGitLibCall('git_rebase_free');
+  End;
+End;
+
+Function TAEGitRepository.Rebase_InProgress: Boolean;
+Var
+  options: git_rebase_options;
+  rebase: Pgit_rebase;
+Begin
+  HandleGitLibOutput('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
+
+  Result := HandleGitLibOutput('git_rebase_open', git_rebase_open(@rebase, _repo, @options), False);
+
+  If Result Then
+  Begin
     git_rebase_free(rebase);
 
     DoGitLibCall('git_rebase_free');
@@ -859,7 +978,7 @@ Var
 Begin
   HandleGitLibOutput('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
 
-  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
+  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS Or GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
 
   HandleGitLibOutput('git_status_list_new', git_status_list_new(@statuslist, _repo, @options));
   Try
@@ -959,7 +1078,7 @@ End;
 Procedure TAEGitRepository.OpenGitRepository;
 Begin
   If Assigned(_repo) Then
-    Raise EAEGitException.Create(geUnknown, 'git_repository_open', 0, 'A repository is already open!');
+    Raise EAEGitException.Create(geUnknown, 'git_repository_open', ecInternal, 'A repository is already open!');
 
   HandleGitLibOutput('git_repository_open', git_repository_open(@_repo, PAnsiChar(UTF8String(_repodir))));
 

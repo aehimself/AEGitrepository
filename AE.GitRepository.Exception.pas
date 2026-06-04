@@ -16,18 +16,18 @@ Type
   EAEGitException = Class(Exception)
   strict private
     _errorcode: TAEGitErrorCode;
-    _lasterrorclass: Integer;
+    _lasterrorclass: TAEGitErrorClass;
     _method: String;
   public
-    Constructor Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: Integer; Const inMessage: String); ReIntroduce;
+    Constructor Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: TAEGitErrorClass; Const inMessage: String); ReIntroduce;
     Property ErrorCode: TAEGitErrorCode Read _errorcode;
     Property Method: String Read _method;
-    Property LastErrorClass: Integer Read _lasterrorclass;
+    Property LastErrorClass: TAEGitErrorClass Read _lasterrorclass;
   End;
 
 Implementation
 
-Constructor EAEGitException.Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: Integer; Const inMessage: String);
+Constructor EAEGitException.Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: TAEGitErrorClass; Const inMessage: String);
 Begin
   inherited Create(inMessage);
 

@@ -14,6 +14,7 @@ Uses libgit2, System.Generics.Collections;
 
 Type
   TAEGitErrorCode = (
+    geFalse = 1,
     geOk = 0,                 // GIT_OK
     geError = -1,             // GIT_ERROR
     geNotFound = -3,          // GIT_ENOTFOUND
@@ -52,6 +53,47 @@ Type
     geUnknown = -999
   );
 
+  TAEGitErrorClass = (
+    ecNone            = 0,    // GIT_ERROR_NONE
+    ecNoMemory        = 1,    // GIT_ERROR_NOMEMORY
+    ecOperatingSystem = 2,    // GIT_ERROR_OS
+    ecInvalid         = 3,    // GIT_ERROR_INVALID
+    ecReference       = 4,    // GIT_ERROR_REFERENCE
+    ecZlib            = 5,    // GIT_ERROR_ZLIB
+    ecRepository      = 6,    // GIT_ERROR_REPOSITORY
+    ecConfig          = 7,    // GIT_ERROR_CONFIG
+    ecRegex           = 8,    // GIT_ERROR_REGEX
+    ecObjectDatabase  = 9,    // GIT_ERROR_ODB
+    ecIndex           = 10,   // GIT_ERROR_INDEX
+    ecObject          = 11,   // GIT_ERROR_OBJECT
+    ecNetwork         = 12,   // GIT_ERROR_NET
+    ecTag             = 13,   // GIT_ERROR_TAG
+    ecTree            = 14,   // GIT_ERROR_TREE
+    ecIndexer         = 15,   // GIT_ERROR_INDEXER
+    ecSsl             = 16,   // GIT_ERROR_SSL
+    ecSubmodule       = 17,   // GIT_ERROR_SUBMODULE
+    ecThread          = 18,   // GIT_ERROR_THREAD
+    ecStash           = 19,   // GIT_ERROR_STASH
+    ecCheckout        = 20,   // GIT_ERROR_CHECKOUT
+    ecFetchHead       = 21,   // GIT_ERROR_FETCHHEAD
+    ecMerge           = 22,   // GIT_ERROR_MERGE
+    ecSsh             = 23,   // GIT_ERROR_SSH
+    ecFilter          = 24,   // GIT_ERROR_FILTER
+    ecRevert          = 25,   // GIT_ERROR_REVERT
+    ecCallback        = 26,   // GIT_ERROR_CALLBACK
+    ecCherryPick      = 27,   // GIT_ERROR_CHERRYPICK
+    ecDescribe        = 28,   // GIT_ERROR_DESCRIBE
+    ecRebase          = 29,   // GIT_ERROR_REBASE
+    ecFileSystem      = 30,   // GIT_ERROR_FILESYSTEM
+    ecPatch           = 31,   // GIT_ERROR_PATCH
+    ecWorkTree        = 32,   // GIT_ERROR_WORKTREE
+    ecSha             = 33,   // GIT_ERROR_SHA
+    ecHttp            = 34,   // GIT_ERROR_HTTP
+    ecInternal        = 35,   // GIT_ERROR_INTERNAL
+    ecGrafts          = 36,   // GIT_ERROR_GRAFTS
+    ecUnknown         = 999
+  );
+
   TAEGitAuthType = (
     gaUserPassPlainText = 1,   // GIT_CREDENTIAL_USERPASS_PLAINTEXT
     gaSshKey = 2,              // GIT_CREDENTIAL_SSH_KEY
@@ -84,12 +126,15 @@ Const
     'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted');
 
 Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
+Function AEGitErrorClassDescription(Const inErrorClass: TAEGitErrorClass): String;
 
 Implementation
 
 Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
 Begin
   Case inErrorCode Of
+    geFalse:
+      Result := 'False';
     geOk:
       Result := 'Success';
     geError:
@@ -162,6 +207,88 @@ Begin
       Result := 'Subject is read-only';
     Else // geUnknown
       Result := 'Unknown libgit2 error';
+  End;
+End;
+
+Function AEGitErrorClassDescription(Const inErrorClass: TAEGitErrorClass): String;
+Begin
+  Case inErrorClass Of
+    ecNone:
+      Result := 'No error';
+    ecNoMemory:
+      Result := 'Out of memory';
+    ecOperatingSystem:
+      Result := 'Operating system error';
+    ecInvalid:
+      Result := 'Invalid argument or state';
+    ecReference:
+      Result := 'Reference error';
+    ecZlib:
+      Result := 'Zlib compression/decompression error';
+    ecRepository:
+      Result := 'Repository error';
+    ecConfig:
+      Result := 'Configuration error';
+    ecRegex:
+      Result := 'Regular expression error';
+    ecObjectDatabase:
+      Result := 'Object database (ODB) error';
+    ecIndex:
+      Result := 'Index error';
+    ecObject:
+      Result := 'Object error';
+    ecNetwork:
+      Result := 'Network error';
+    ecTag:
+      Result := 'Tag error';
+    ecTree:
+      Result := 'Tree error';
+    ecIndexer:
+      Result := 'Indexer error';
+    ecSsl:
+      Result := 'SSL/TLS error';
+    ecSubmodule:
+      Result := 'Submodule error';
+    ecThread:
+      Result := 'Threading error';
+    ecStash:
+      Result := 'Stash error';
+    ecCheckout:
+      Result := 'Checkout error';
+    ecFetchHead:
+      Result := 'FETCH_HEAD error';
+    ecMerge:
+      Result := 'Merge error';
+    ecSsh:
+      Result := 'SSH error';
+    ecFilter:
+      Result := 'Filter error';
+    ecRevert:
+      Result := 'Revert error';
+    ecCallback:
+      Result := 'Callback error';
+    ecCherryPick:
+      Result := 'Cherry-pick error';
+    ecDescribe:
+      Result := 'Describe error';
+    ecRebase:
+      Result := 'Rebase error';
+    ecFileSystem:
+      Result := 'File system error';
+    ecPatch:
+      Result := 'Patch error';
+    ecWorkTree:
+      Result := 'Worktree error';
+    ecSha:
+      Result := 'SHA/hash error';
+    ecHttp:
+      Result := 'HTTP error';
+    ecInternal:
+      Result := 'Internal libgit2 error';
+    ecGrafts:
+      Result := 'Grafts error';
+    Else // ecUnknown
+      Result := 'Unknown or unsupported libgit2 error class';
   End;
 End;
 
