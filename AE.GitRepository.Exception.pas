@@ -15,14 +15,14 @@ Uses System.SysUtils, AE.GitRepository.TypeDef;
 Type
   EAEGitException = Class(Exception)
   strict private
+    _errorclass: TAEGitErrorClass;
     _errorcode: TAEGitErrorCode;
-    _lasterrorclass: TAEGitErrorClass;
     _method: String;
   public
     Constructor Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: TAEGitErrorClass; Const inMessage: String); ReIntroduce;
+    Property ErrorClass: TAEGitErrorClass Read _errorclass;
     Property ErrorCode: TAEGitErrorCode Read _errorcode;
     Property Method: String Read _method;
-    Property LastErrorClass: TAEGitErrorClass Read _lasterrorclass;
   End;
 
 Implementation
@@ -31,9 +31,9 @@ Constructor EAEGitException.Create(Const inErrorCode: TAEGitErrorCode; Const inM
 Begin
   inherited Create(inMessage);
 
+  _errorclass := inErrorClass;
   _errorcode := inErrorCode;
   _method := inMethod;
-  _lasterrorclass := inErrorClass;
 End;
 
 End.

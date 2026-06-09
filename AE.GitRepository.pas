@@ -42,7 +42,7 @@ Type
     Procedure CreateBranch(Const inBranchName: String);
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
-    Procedure Fetch(inRemote: String = '');
+    Procedure Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
     Procedure PushCommitsToRemote(inRemote: String = '');
     Procedure Rebase(inBranch: String = '');
     Procedure Rebase_Abort;
@@ -114,27 +114,6 @@ Begin
 
   Result := 0;
 End;
-
-//function GitCertificateCheck(
-//  cert: Pgit_cert;
-//  valid: Integer;
-//  host: PAnsiChar;
-//  payload: Pointer
-//): Integer; cdecl;
-//begin
-//  OutputDebugString(PChar(
-//    Format('Host=%s Valid=%d', [string(host), valid])
-//  ));
-//
-//  case cert^.cert_type of
-//    GIT_CERT_X509_:
-//      OutputDebugString('X509 cert');
-//    GIT_CERT_HOSTKEY_LIBSSH2:
-//      OutputDebugString('SSH host key');
-//  end;
-//
-//  Result := 0;  // accept
-//end;
 
 //
 // TAEGitRepository
@@ -585,27 +564,80 @@ Begin
   End;
 End;
 
-Procedure TAEGitRepository.Fetch(inRemote: String = '');
+Procedure TAEGitRepository.Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
 Var
   remote: Pgit_remote;
   options: git_fetch_options;
+  specs, fetchspecs: git_strarray;
+  refs: TArray<PAnsiChar>;
+  p: PPAnsiChar;
+  a: Integer;
+  hastagrefs: Boolean;
 Begin
   If inRemote.IsEmpty Then
     inRemote := Self.GetDefaultRemoteName;
 
   HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
-    HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, 1));
+    HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, GIT_FETCH_OPTIONS_VERSION));
+
     options.callbacks.payload := @_authmethod;
     options.callbacks.credentials := GitLibAuthCallback;
-//    options.callbacks.certificate_check := GitCertificateCheck;
 
-    HandleGitLibOutput('git_remote_fetch', git_remote_fetch(remote, nil, @options, nil));
-  finally
+    If inDownloadTags Then
+      options.download_tags := GIT_REMOTE_DOWNLOAD_TAGS_ALL;
+
+    HandleGitLibOutput('git_remote_get_fetch_refspecs', git_remote_get_fetch_refspecs(@specs, remote));
+    Try
+      hastagrefs := False;
+
+      If inDownloadTags Then
+      Begin
+        p := specs.strings;
+
+        For a := 0 To specs.Count - 1 Do
+        Begin
+          hastagrefs := String(UTF8String(p^)).Contains('refs/tags/');
+
+          If hastagrefs Then
+            Break;
+
+          Inc(p);
+        End;
+      End;
+
+      SetLength(refs, Integer(specs.Count) + Ord(inDownloadTags And Not hastagrefs));
+
+      p := specs.strings;
+
+      For a := 0 To specs.Count - 1 Do
+      Begin
+        refs[a] := PAnsiChar(UTF8String(p^));
+
+        Inc(p);
+      End;
+
+      If inDownloadTags And Not hastagrefs Then
+        refs[High(refs)] := PAnsiChar(UTF8String('+refs/tags/*:refs/tags/*'));
+    Finally
+      git_strarray_dispose(@specs);
+
+      DoGitLibCall('git_strarray_dispose');
+    End;
+
+    fetchspecs.Count := Length(refs);
+
+    If fetchspecs.Count > 0 then
+      fetchspecs.strings := @refs[0]
+    Else
+      fetchspecs.strings := nil;
+
+    HandleGitLibOutput('git_remote_fetch', git_remote_fetch(remote, @fetchspecs, @options, nil));
+  Finally
     git_remote_free(remote);
 
     DoGitLibCall('git_remote_free');
-  end;
+  End;
 
   Self.UpdateCommitCount(inRemote);
 End;
