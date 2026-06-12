@@ -26,6 +26,8 @@ Type
     Procedure DoRebase(Const inRebase: Pgit_rebase; Const inSignature: Pgit_signature);
     Procedure SetCurrentBranch(inBranchName: String);
     Procedure SetRepoDir(Const inRepoDir: String);
+    Function GetHeadIndexDiff(Const inFileName: String): Pgit_diff;
+    Function GetIndexWorkdirDiff(Const inFileName: String): Pgit_diff;
   strict protected
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
@@ -57,6 +59,7 @@ Type
     Procedure UnstageFile(Const inFileName: String);
     Procedure UpdateCurrentBranchName;
     Function BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;
+    Function GetDiff(Const inFileName: String; Const inStagedOnly: Boolean): String;
     Function Rebase_InProgress: Boolean;
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
@@ -1105,6 +1108,79 @@ Begin
 
     DoGitLibCall('git_strarray_dispose');
   End;
+End;
+
+Function TAEGitRepository.GetDiff(Const inFileName: String; Const inStagedOnly: Boolean): String;
+Var
+  diff: Pgit_diff;
+  buf: git_buf;
+Begin
+  FillChar(buf, SizeOf(buf), 0);
+
+  If inStagedOnly Then
+    diff := GetHeadIndexDiff(inFileName)
+  Else
+    diff := GetIndexWorkdirDiff(inFileName);
+  Try
+    HandleGitLibOutput('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
+    Try
+      Result := String(UTF8String(buf.ptr));
+    Finally
+      git_buf_dispose(@buf);
+
+      DoGitLibCall('git_buf_dispose');
+    End;
+  Finally
+    git_diff_free(diff);
+
+    DoGitLibCall('git_diff_free');
+  End;
+End;
+
+Function TAEGitRepository.GetHeadIndexDiff(Const inFileName: String): Pgit_diff;
+Var
+  head: Pgit_object;
+  tree: Pgit_tree;
+  options: git_diff_options;
+  filename: PAnsiChar;
+Begin
+  HandleGitLibOutput('git_revparse_single', git_revparse_single(@head, _repo, 'HEAD'));
+  Try
+    HandleGitLibOutput('git_commit_tree', git_commit_tree(@tree, Pgit_commit(head)));
+    Try
+      HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
+
+      filename := PAnsiChar(UTF8String(inFileName));
+
+      options.pathspec.count := 1;
+      options.pathspec.strings := @filename;
+
+      HandleGitLibOutput('git_diff_tree_to_index', git_diff_tree_to_index(@Result, _repo, tree, nil, @options));
+    Finally
+      git_tree_free(tree);
+
+      DoGitLibCall('git_tree_free');
+    End;
+  Finally
+    git_object_free(head);
+
+    DoGitLibCall('git_object_free');
+  End;
+End;
+
+Function TAEGitRepository.GetIndexWorkdirDiff(Const inFileName: String): Pgit_diff;
+Var
+  options: git_diff_options;
+  filename: PAnsiChar;
+Begin
+  HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
+
+  filename := PAnsiChar(UTF8String(inFileName));
+
+  options.pathspec.count := 1;
+  options.pathspec.strings := @filename;
+
+  HandleGitLibOutput('git_diff_index_to_workdir', git_diff_index_to_workdir(@Result, _repo, nil, @options));
 End;
 
 Procedure TAEGitRepository.OpenGitRepository;
