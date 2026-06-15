@@ -127,9 +127,11 @@ End;
 Procedure TAEGitRepository.RevertFileModifications(Const inFileName: String);
 Var
   options: git_checkout_options;
+  utf8strings: UTF8String;
   pathstrings: PAnsiChar;
 Begin
-  pathstrings := PAnsiChar(UTF8String(inFileName.Replace('\', '/')));
+  utf8strings := UTF8String(inFileName.Replace('\', '/'));
+  pathstrings := PAnsiChar(utf8strings);
   HandleGitLibOutput('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
 
   options.checkout_strategy := GIT_CHECKOUT_FORCE Or GIT_CHECKOUT_REMOVE_UNTRACKED Or GIT_CHECKOUT_DISABLE_PATHSPEC_MATCH;
@@ -143,11 +145,13 @@ Procedure TAEGitRepository.UnstageFile(Const inFileName: String);
 Var
   target: Pgit_object;
   pathspec: git_strarray;
+  utf8filename: UTF8String;
   filename: PAnsiChar;
 Begin
   HandleGitLibOutput('git_revparse_single', git_revparse_single(@target, _repo, 'HEAD'));
   Try
-    filename := PAnsiChar(UTF8String(inFileName));
+    utf8filename := UTF8String(inFileName);
+    filename := PAnsiChar(utf8filename);
     pathspec.count := 1;
     pathspec.strings := @filename;
 
@@ -709,27 +713,40 @@ End;
 
 Function TAEGitRepository.AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
 Var
+  utf8user, utf8pass, utf8pubkey, utf8privkey: UTF8String;
   sshuser, sshpass, pubkey, privkey: PAnsiChar;
 Begin
   If Not _settings.UserName.IsEmpty Then
-    sshuser := PAnsiChar(UTF8String(_settings.UserName))
+  Begin
+    utf8user := UTF8String(_settings.UserName);
+    sshuser := PAnsiChar(utf8user);
+  End
   Else
     sshuser := inUsername;
 
   If Not _settings.Password.IsEmpty Then
-    sshpass := PAnsiChar(UTF8String(_settings.Password))
+  Begin
+    utf8pass := UTF8String(_settings.Password);
+    sshpass := PAnsiChar(utf8pass);
+  End
   Else
     sshpass := nil;
 
   If (gaSshKey In inAllowedTypes) And _settings.UseSSHKeyAuth Then
   Begin
     If Not _settings.SSHPublicKey.IsEmpty Then
-      pubkey := PAnsiChar(UTF8String(_settings.SSHPublicKey))
+    Begin
+      utf8pubkey := UTF8String(_settings.SSHPublicKey);
+      pubkey := PAnsiChar(utf8pubkey);
+    End
     Else
       pubkey := nil;
 
     If Not _settings.SSHPrivateKey.IsEmpty Then
-      privkey := PAnsiChar(UTF8String(_settings.SSHPrivateKey))
+    Begin
+      utf8privkey := UTF8String(_settings.SSHPrivateKey);
+      privkey := PAnsiChar(utf8privkey);
+    End
     Else
       privkey := nil;
 
@@ -1117,12 +1134,14 @@ Var
   diff: Pgit_diff;
   options: git_apply_options;
   buf: PAnsiChar;
+  utf8patch: UTF8String;
 Begin
   HandleGitLibOutput('git_apply_options_init', git_apply_options_init(@options, GIT_APPLY_OPTIONS_VERSION));
 
   FillChar(buf, SizeOf(buf), 0);
 
-  buf := PAnsiChar(UTF8String(inPatch));
+  utf8patch := UTF8String(inPatch);
+  buf := PAnsiChar(utf8patch);
 
   HandleGitLibOutput('git_diff_from_buffer', git_diff_from_buffer(@diff, buf, Length(buf)));
   Try
@@ -1245,6 +1264,7 @@ Var
   options: git_push_options;
   remote: Pgit_remote;
   callbacks: git_remote_callbacks;
+  utf8ref: UTF8String;
   ref: PAnsiChar;
   refarray: git_strarray;
   localref, remoteref: Pgit_reference;
@@ -1261,7 +1281,8 @@ Begin
   callbacks.payload := @_authmethod;
   callbacks.credentials := GitLibAuthCallback;
 
-  ref := PAnsiChar(UTF8String(Format('+refs/heads/%s:refs/heads/%s', [_currentbranch, _currentbranch])));
+  utf8ref := UTF8String(Format('+refs/heads/%s:refs/heads/%s', [_currentbranch, _currentbranch]));
+  ref := PAnsiChar(utf8ref);
   refarray.strings := @ref;
   refarray.Count := 1;
 
