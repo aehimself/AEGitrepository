@@ -26,8 +26,8 @@ Type
     Procedure DoRebase(Const inRebase: Pgit_rebase; Const inSignature: Pgit_signature);
     Procedure SetCurrentBranch(inBranchName: String);
     Procedure SetRepoDir(Const inRepoDir: String);
-    Function GetHeadIndexDiff(Const inFileName: String): Pgit_diff;
-    Function GetIndexWorkdirDiff(Const inFileName: String): Pgit_diff;
+    Function GetHeadIndexDiff(Const inFileNames: TArray<String>): Pgit_diff;
+    Function GetIndexWorkdirDiff(Const inFileNames: TArray<String>): Pgit_diff;
   strict protected
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
@@ -45,6 +45,7 @@ Type
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Procedure Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
+    Procedure Patch_Apply(Const inPatch: String);
     Procedure PushCommitsToRemote(inRemote: String = '');
     Procedure Rebase(inBranch: String = '');
     Procedure Rebase_Abort;
@@ -59,7 +60,8 @@ Type
     Procedure UnstageFile(Const inFileName: String);
     Procedure UpdateCurrentBranchName;
     Function BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;
-    Function GetDiff(Const inFileName: String; Const inStagedOnly: Boolean): String;
+    Function Patch_Get(Const inFileName: String; Const inStagedOnly: Boolean): String; Overload;
+    Function Patch_Get(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String; Overload;
     Function Rebase_InProgress: Boolean;
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
@@ -469,7 +471,7 @@ Begin
       tmp := nil;
 
       If HandleGitLibOutput('git_config_get_string', git_config_get_string(@tmp, cfg, 'init.defaultBranch'), False) Then
-        _currentbranch := string(UTF8String(tmp));
+        _currentbranch := String(UTF8String(tmp));
     Finally
       git_config_free(cfg);
 
@@ -1110,7 +1112,34 @@ Begin
   End;
 End;
 
-Function TAEGitRepository.GetDiff(Const inFileName: String; Const inStagedOnly: Boolean): String;
+Procedure TAEGitRepository.Patch_Apply(Const inPatch: String);
+Var
+  diff: Pgit_diff;
+  options: git_apply_options;
+  buf: PAnsiChar;
+Begin
+  HandleGitLibOutput('git_apply_options_init', git_apply_options_init(@options, GIT_APPLY_OPTIONS_VERSION));
+
+  FillChar(buf, SizeOf(buf), 0);
+
+  buf := PAnsiChar(UTF8String(inPatch));
+
+  HandleGitLibOutput('git_diff_from_buffer', git_diff_from_buffer(@diff, buf, Length(buf)));
+  Try
+    HandleGitLibOutput('git_apply', git_apply(_repo, diff, GIT_APPLY_LOCATION_WORKDIR, @options));
+  Finally
+    git_diff_free(diff);
+
+    DoGitLibCall('git_diff_free');
+  End;
+End;
+
+Function TAEGitRepository.Patch_Get(Const inFileName: String; Const inStagedOnly: Boolean): String;
+Begin
+  Result := Patch_Get([inFileName], inStagedOnly);
+End;
+
+Function TAEGitRepository.Patch_Get(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
 Var
   diff: Pgit_diff;
   buf: git_buf;
@@ -1118,9 +1147,9 @@ Begin
   FillChar(buf, SizeOf(buf), 0);
 
   If inStagedOnly Then
-    diff := GetHeadIndexDiff(inFileName)
+    diff := GetHeadIndexDiff(inFileNames)
   Else
-    diff := GetIndexWorkdirDiff(inFileName);
+    diff := GetIndexWorkdirDiff(inFileNames);
   Try
     HandleGitLibOutput('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
     Try
@@ -1137,12 +1166,14 @@ Begin
   End;
 End;
 
-Function TAEGitRepository.GetHeadIndexDiff(Const inFileName: String): Pgit_diff;
+Function TAEGitRepository.GetHeadIndexDiff(Const inFileNames: TArray<String>): Pgit_diff;
 Var
   head: Pgit_object;
   tree: Pgit_tree;
   options: git_diff_options;
-  filename: PAnsiChar;
+  utffilenames: TArray<UTF8String>;
+  filenames: TArray<PAnsiChar>;
+  a: Integer;
 Begin
   HandleGitLibOutput('git_revparse_single', git_revparse_single(@head, _repo, 'HEAD'));
   Try
@@ -1150,10 +1181,17 @@ Begin
     Try
       HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
 
-      filename := PAnsiChar(UTF8String(inFileName));
+      SetLength(utffilenames, Length(inFileNames));
+      SetLength(filenames, Length(inFileNames));
 
-      options.pathspec.count := 1;
-      options.pathspec.strings := @filename;
+      For a := Low(inFileNames) To High(inFileNames) Do
+      Begin
+        utffilenames[a] := UTF8String(inFileNames[a]);
+        filenames[a] := PAnsiChar(utffilenames[a]);
+      End;
+
+      options.pathspec.count := Length(filenames);
+      options.pathspec.strings := @filenames[0];
 
       HandleGitLibOutput('git_diff_tree_to_index', git_diff_tree_to_index(@Result, _repo, tree, nil, @options));
     Finally
@@ -1168,17 +1206,26 @@ Begin
   End;
 End;
 
-Function TAEGitRepository.GetIndexWorkdirDiff(Const inFileName: String): Pgit_diff;
+Function TAEGitRepository.GetIndexWorkdirDiff(Const inFileNames: TArray<String>): Pgit_diff;
 Var
   options: git_diff_options;
-  filename: PAnsiChar;
+  utffilenames: TArray<UTF8String>;
+  filenames: TArray<PAnsiChar>;
+  a: Integer;
 Begin
   HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
 
-  filename := PAnsiChar(UTF8String(inFileName));
+  SetLength(utffilenames, Length(inFileNames));
+  SetLength(filenames, Length(inFileNames));
 
-  options.pathspec.count := 1;
-  options.pathspec.strings := @filename;
+  For a := Low(inFileNames) To High(inFileNames) Do
+  Begin
+    utffilenames[a] := UTF8String(inFileNames[a]);
+    filenames[a] := PAnsiChar(utffilenames[a]);
+  End;
+
+  options.pathspec.count := Length(filenames);
+  options.pathspec.strings := @filenames[0];
 
   HandleGitLibOutput('git_diff_index_to_workdir', git_diff_index_to_workdir(@Result, _repo, nil, @options));
 End;
