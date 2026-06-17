@@ -1250,7 +1250,11 @@ Begin
         HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walker, @startoid));
       End
       Else
+      Begin
         HandleGitLibOutput('git_revwalk_push_head', git_revwalk_push_head(walker));
+
+        HandleGitLibOutput('git_revwalk_push_ref', git_revwalk_push_ref(walker, 'refs/remotes/origin/master'));
+      End;
 
       While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@currentoid, walker), False) Do
       Begin
