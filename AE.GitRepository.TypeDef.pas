@@ -121,6 +121,60 @@ Type
 
   TAEGitBranchType = ( gbLocal, gbRemote, gbAll );
 
+  TAEGitCommit = Class
+  strict private
+    _author: String;
+    _authoremail: String;
+    _branches: TArray<String>;
+    _committer: String;
+    _committeremail: String;
+    _datetime: TDateTime;
+    _hash: String;
+    _head: Boolean;
+    _message: String;
+    _parentcommithashes: TArray<String>;
+    _summary: String;
+    _tags: TArray<String>;
+  public
+    Constructor Create(Const inAuthor, inAuthorEmail, inCommitter, inCommitterEmail, inHash, inMessage, inSummary: String; Const inDateTime: TDateTime; Const inParentCommitHashes, inTags, inBranches: TArray<String>; Const inHead: Boolean); ReIntroduce;
+    Property Author: String Read _author;
+    Property AuthorEmail: String Read _authoremail;
+    Property Branches: TArray<String> Read _branches;
+    Property Committer: String Read _committer;
+    Property CommitterEmail: String Read _committeremail;
+    Property DateTime: TDateTime Read _datetime;
+    Property Hash: String Read _hash;
+    Property Head: Boolean Read _head;
+    Property Message: String Read _message;
+    Property ParentCommitHashes: TArray<String> Read _parentcommithashes;
+    Property Summary: String Read _summary;
+    Property Tags: TArray<String> Read _tags;
+  End;
+
+  TAEGitCommitDecorationType = ( dtTag, dtBranch );
+
+  TAEGitCommitDecorationCache = Class(TObjectDictionary<String, TObjectDictionary<TAEGitCommitDecorationType, TList<String>>>)
+  strict private
+    _head: String;
+  public
+    Constructor Create; ReIntroduce;
+    Procedure AddItem(Const inHash: String; Const inType: TAEGitCommitDecorationType; Const inItem: String);
+    Function Items(Const inHash: String; Const inType: TAEGitCommitDecorationType): TArray<String>;
+    Property Head: String Read _head Write _head;
+  End;
+
+  TAEGitCommitList = Class(TObjectDictionary<String, TAEGitCommit>)
+  strict private
+    _order: TList<String>;
+    Function GetOrderedList: TArray<TAEGitCommit>;
+  protected
+    Procedure KeyNotify(Const inKey: String; inAction: TCollectionNotification); Override;
+  public
+    Constructor Create; ReIntroduce;
+    Destructor Destroy; Override;
+    Property OrderedList: TArray<TAEGitCommit> Read GetOrderedList;
+  End;
+
 Const
   AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'New', 'Modified', 'Deleted', 'Renamed',
     'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted');
@@ -129,6 +183,8 @@ Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
 Function AEGitErrorClassDescription(Const inErrorClass: TAEGitErrorClass): String;
 
 Implementation
+
+Uses System.SysUtils;
 
 Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
 Begin
@@ -290,6 +346,96 @@ Begin
     Else // ecUnknown
       Result := 'Unknown or unsupported libgit2 error class';
   End;
+End;
+
+//
+// TAEGitCommit
+//
+
+Constructor TAEGitCommit.Create(Const inAuthor, inAuthorEmail, inCommitter, inCommitterEmail, inHash, inMessage, inSummary: String; Const inDateTime: TDateTime; Const inParentCommitHashes, inTags, inBranches: TArray<String>; Const inHead: Boolean);
+Begin
+  inherited Create;
+
+  _author := inAuthor;
+  _authoremail := inAuthorEmail;
+  _branches := inBranches;
+  _committer := inCommitter;
+  _committeremail := inCommitterEmail;
+  _datetime := inDateTime;
+  _hash := inHash;
+  _head := inHead;
+  _message := inMessage;
+  _parentcommithashes := inParentCommitHashes;
+  _summary := inSummary;
+  _tags := inTags;
+End;
+
+//
+// TAEGitCommitList
+//
+
+Constructor TAEGitCommitList.Create;
+Begin
+  inherited Create([doOwnsValues]);
+
+  _order := TList<String>.Create;
+End;
+
+Destructor TAEGitCommitList.Destroy;
+Begin
+  inherited;
+
+  FreeAndNil(_order);
+End;
+
+Function TAEGitCommitList.GetOrderedList: TArray<TAEGitCommit>;
+Var
+  a: NativeInt;
+Begin
+  SetLength(Result, _order.Count);
+
+  For a := 0 To _order.Count - 1 Do
+    Result[a] := Self[_order[a]];
+End;
+
+Procedure TAEGitCommitList.KeyNotify(Const inKey: String; inAction: TCollectionNotification);
+Begin
+  inherited;
+
+  Case inAction Of
+    cnRemoved:
+      _order.Remove(inKey);
+    cnAdded:
+      _order.Add(inKey);
+  End;
+End;
+
+//
+// TAEGitCommitDecorationCache
+//
+
+Constructor TAEGitCommitDecorationCache.Create;
+Begin
+  inherited Create([doOwnsValues]);
+End;
+
+Function TAEGitCommitDecorationCache.Items(Const inHash: String; Const inType: TAEGitCommitDecorationType): TArray<String>;
+Begin
+  If Not Self.ContainsKey(inHash) Or Not Self[inHash].ContainsKey(inType) Then
+    Result := []
+  Else
+    Result := Self[inHash][inType].ToArray;
+End;
+
+Procedure TAEGitCommitDecorationCache.AddItem(Const inHash: String; Const inType: TAEGitCommitDecorationType; Const inItem: String);
+Begin
+  If Not Self.ContainsKey(inHash) Then
+    Self.Add(inHash, TObjectDictionary<TAEGitCommitDecorationType, TList<String>>.Create([doOwnsValues]));
+
+  If Not Self[inHash].ContainsKey(inType) Then
+    Self[inHash].Add(inType, TList<String>.Create);
+
+  Self[inHash][inType].Add(inItem);
 End;
 
 End.

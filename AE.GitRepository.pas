@@ -31,6 +31,7 @@ Type
   strict protected
     Procedure CloseGitRepository;
     Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
+    Procedure FillDecorationCache(Const outDecorationCache: TAEGitCommitDecorationCache);
     Procedure OpenGitRepository;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Procedure UpdateCommitCount(Const inRemote: String);
@@ -44,6 +45,7 @@ Type
     Procedure CreateBranch(Const inBranchName: String);
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
+    Procedure GetCommitList(Const outCommitList: TAEGitCommitList; Const inStartCommitHash: String = ''; Const inCommitAmount: Integer = 0);
     Procedure Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
     Procedure Patch_Apply(Const inPatch: String);
     Procedure PushCommitsToRemote(inRemote: String = '');
@@ -73,7 +75,7 @@ Type
 
 Implementation
 
-Uses AE.GitRepository.Exception, System.IOUtils, WinApi.Windows;
+Uses AE.GitRepository.Exception, System.IOUtils, System.DateUtils, System.Generics.Collections;
 
 //
 // LibGit2 callbacks. These can not be procedure / function of objects so in the payload we send the instances own
@@ -651,6 +653,112 @@ Begin
   Self.UpdateCommitCount(inRemote);
 End;
 
+Procedure TAEGitRepository.FillDecorationCache(Const outDecorationCache: TAEGitCommitDecorationCache);
+Var
+  iterator: Pgit_reference_iterator;
+  ref: Pgit_reference;
+  commit: Pgit_object;
+  oid: Pgit_oid;
+  tmp: PAnsiChar;
+  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
+  branchiterator: Pgit_branch_iterator;
+  branchtype: git_branch_t;
+Begin
+  // Tags
+
+  HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, 'refs/tags/*'));
+  Try
+    While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    Try
+      HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+      Try
+        oid := git_object_id(commit);
+
+        DoGitLibCall('git_object_id');
+
+        git_oid_tostr(sha, SizeOf(sha), oid);
+
+        DoGitLibCall('git_oid_tostr');
+
+        tmp := git_reference_shorthand(ref);
+
+        DoGitLibCall('git_reference_shorthand');
+
+        outDecorationCache.AddItem(String(UTF8String(sha)), dtTag, String(UTF8String(tmp)));
+      Finally
+        git_object_free(commit);
+
+        DoGitLibCall('git_object_free');
+      End
+    Finally
+      git_reference_free(ref);
+    End;
+  Finally
+    git_reference_iterator_free(iterator);
+
+    DoGitLibCall('git_reference_iterator_free');
+  End;
+
+  // Branches
+  HandleGitLibOutput('git_branch_iterator_new', git_branch_iterator_new(@branchiterator, _repo, GIT_BRANCH_ALL));
+  Try
+    While HandleGitLibOutput('git_branch_next', git_branch_next(@ref, @branchtype, branchiterator), False) Do
+    Try
+      HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+      Try
+        oid := git_object_id(commit);
+
+        DoGitLibCall('git_object_id');
+
+        git_oid_tostr(sha, SizeOf(sha), oid);
+
+        DoGitLibCall('git_oid_tostr');
+
+        HandleGitLibOutput('git_branch_name', git_branch_name(@tmp, ref));
+
+        outDecorationCache.AddItem(String(UTF8String(sha)), dtBranch, String(UTF8String(tmp)));
+      Finally
+        git_object_free(commit);
+
+        DoGitLibCall('git_object_free');
+      End;
+    Finally
+      git_reference_free(ref);
+
+      DoGitLibCall('git_reference_free');
+    End;
+  Finally
+    git_branch_iterator_free(branchiterator);
+
+    DoGitLibCall('git_branch_iterator_free');
+  End;
+
+  // Heads
+  HandleGitLibOutput('git_repository_head', git_repository_head(@ref, _repo));
+  Try
+    HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+    Try
+      oid := git_object_id(commit);
+
+      DoGitLibCall('git_object_id');
+
+      git_oid_tostr(sha, SizeOf(sha), oid);
+
+      DoGitLibCall('git_oid_tostr');
+
+      outDecorationCache.Head := String(UTF8String(sha));
+    Finally
+      git_object_free(commit);
+
+      DoGitLibCall('git_object_free');
+    End;
+  Finally
+    git_reference_free(ref);
+
+    DoGitLibCall('git_reference_free');
+  End;
+End;
+
 Procedure TAEGitRepository.SetCurrentBranch(inBranchName: String);
 Var
   options: git_checkout_options;
@@ -1109,6 +1217,136 @@ Begin
     git_status_list_free(statuslist);
 
     DoGitLibCall('git_status_list_free');
+  End;
+End;
+
+Procedure TAEGitRepository.GetCommitList(Const outCommitList: TAEGitCommitList; Const inStartCommitHash: String = ''; Const inCommitAmount: Integer = 0);
+Var
+  walker: Pgit_revwalk;
+  startoid, currentoid: git_oid;
+  parentoid: Pgit_oid;
+  commit: Pgit_commit;
+  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
+  signature: Pgit_signature;
+  parentcount: Cardinal;
+  a: NativeInt;
+  hash, author, authoremail, committer, committeremail, summary, message: String;
+  datetime: TDateTime;
+  parentcommits: TArray<String>;
+  cache: TAEGitCommitDecorationCache;
+Begin
+  cache := TAEGitCommitDecorationCache.Create;
+  Try
+    FillDecorationCache(cache);
+
+    HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walker, _repo));
+    Try
+      HandleGitLibOutput('git_revwalk_sorting', git_revwalk_sorting(walker, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+
+      If Not inStartCommitHash.IsEmpty Then
+      Begin
+        HandleGitLibOutput('git_oid_fromstr', git_oid_fromstr(@startoid, PAnsiChar(UTF8String(inStartCommitHash))));
+
+        HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walker, @startoid));
+      End
+      Else
+        HandleGitLibOutput('git_revwalk_push_head', git_revwalk_push_head(walker));
+
+      While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@currentoid, walker), False) Do
+      Begin
+        If (inCommitAmount <> 0) And (outCommitList.Count >= inCommitAmount) Then
+          Exit;
+
+        git_oid_tostr(sha, SizeOf(sha), @currentoid);
+
+        DoGitLibCall('git_oid_tostr');
+
+        If outCommitList.ContainsKey(String(UTF8String(sha))) Then
+          Continue;
+
+        HandleGitLibOutput('git_commit_lookup', git_commit_lookup(@commit, _repo, @currentoid));
+        Try
+          hash := String(UTF8String(sha));
+
+          signature := git_commit_author(commit);
+
+          DoGitLibCall('git_commit_author');
+
+          author := String(UTF8String(signature^.name_));
+          authoremail := String(UTF8String(signature^.email));
+
+          signature := git_commit_committer(commit);
+
+          DoGitLibCall('git_commit_committer');
+
+          committer := String(UTF8String(signature^.name_));
+          committeremail := String(UTF8String(signature^.email));
+
+          summary := String(UTF8String(git_commit_summary(commit)));
+
+          DoGitLibCall('git_commit_summary');
+
+          message := String(UTF8String(git_commit_message(commit)));
+
+          DoGitLibCall('git_commit_message');
+
+          If message = summary Then
+            message := '';
+
+          datetime := UnixToDateTime(git_commit_time(commit), True);
+
+          DoGitLibCall('git_commit_time');
+
+          datetime := IncMinute(datetime, git_commit_time_offset(commit));
+
+          DoGitLibCall('git_commit_time_offset');
+
+          parentcount := git_commit_parentcount(commit);
+
+          DoGitLibCall('git_commit_parentcount');
+
+          SetLength(parentcommits, parentcount);
+
+          For a := 0 To Integer(parentcount) - 1 Do
+          Begin
+            parentoid := git_commit_parent_id(commit, a);
+
+            DoGitLibCall('git_commit_parent_id');
+
+            git_oid_tostr(sha, SizeOf(sha), parentoid);
+
+            DoGitLibCall('git_oid_tostr');
+
+            parentcommits[a] := String(UTF8String(sha));
+          End;
+
+          outCommitList.Add(hash, TAEGitCommit.Create(
+            author,
+            authoremail,
+            committer,
+            committeremail,
+            hash,
+            message,
+            summary,
+            datetime,
+            parentcommits,
+            cache.Items(hash, dtTag),
+            cache.Items(hash, dtBranch),
+            cache.Head = hash)
+          );
+        Finally
+          git_commit_free(commit);
+
+          DoGitLibCall('git_commit_free');
+        End;
+      End;
+    Finally
+      git_revwalk_free(walker);
+
+      DoGitLibCall('git_revwalk_free');
+    End;
+  Finally
+    FreeAndNil(cache);
   End;
 End;
 
