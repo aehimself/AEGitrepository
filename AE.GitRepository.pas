@@ -563,7 +563,7 @@ Begin
         While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
           Inc(_outgoingcommits);
       Finally
-        git_revwalk_free(Walk);
+        git_revwalk_free(walk);
 
         DoGitLibCall('git_revwalk_free');
       End;
@@ -1253,7 +1253,7 @@ Begin
       Begin
         HandleGitLibOutput('git_revwalk_push_head', git_revwalk_push_head(walker));
 
-        HandleGitLibOutput('git_revwalk_push_ref', git_revwalk_push_ref(walker, 'refs/remotes/origin/master'));
+        HandleGitLibOutput('git_revwalk_push_ref', git_revwalk_push_ref(walker, PAnsiChar(UTF8String('refs/remotes/' + GetDefaultRemoteName + '/' + _currentbranch))));
       End;
 
       While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@currentoid, walker), False) Do
