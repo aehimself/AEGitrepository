@@ -30,14 +30,14 @@ Type
     Function GetIndexWorkdirDiff(Const inFileNames: TArray<String>): Pgit_diff;
   strict protected
     Procedure CloseGitRepository;
-    Procedure DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
+    Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure FillDecorationCache(Const outDecorationCache: TAEGitCommitDecorationCache);
     Procedure OpenGitRepository;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Procedure UpdateCommitCount(Const inRemote: String);
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function GetDefaultRemoteName: String;
-    Function HandleGitLibOutput(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
   public
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
@@ -134,13 +134,13 @@ Var
 Begin
   utf8strings := UTF8String(inFileName.Replace('\', '/'));
   pathstrings := PAnsiChar(utf8strings);
-  HandleGitLibOutput('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
+  HandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
 
   options.checkout_strategy := GIT_CHECKOUT_FORCE Or GIT_CHECKOUT_REMOVE_UNTRACKED Or GIT_CHECKOUT_DISABLE_PATHSPEC_MATCH;
   options.paths.count := 1;
   options.paths.strings := @pathstrings;
 
-  HandleGitLibOutput('git_checkout_tree', git_checkout_tree(_repo, nil, @options));
+  HandleLibGit2Output('git_checkout_tree', git_checkout_tree(_repo, nil, @options));
 End;
 
 Procedure TAEGitRepository.UnstageFile(Const inFileName: String);
@@ -150,18 +150,18 @@ Var
   utf8filename: UTF8String;
   filename: PAnsiChar;
 Begin
-  HandleGitLibOutput('git_revparse_single', git_revparse_single(@target, _repo, 'HEAD'));
+  HandleLibGit2Output('git_revparse_single', git_revparse_single(@target, _repo, 'HEAD'));
   Try
     utf8filename := UTF8String(inFileName);
     filename := PAnsiChar(utf8filename);
     pathspec.count := 1;
     pathspec.strings := @filename;
 
-    HandleGitLibOutput('git_reset_default', git_reset_default(_repo, target, @pathspec));
+    HandleLibGit2Output('git_reset_default', git_reset_default(_repo, target, @pathspec));
   Finally
     git_object_free(target);
 
-    DoGitLibCall('git_object_free');
+    DoLibGit2Call('git_object_free');
   End;
 End;
 
@@ -169,36 +169,36 @@ Procedure TAEGitRepository.StageFile(Const inFileName: String);
 Var
   index: Pgit_index;
 Begin
-  HandleGitLibOutput('git_repository_index', git_repository_index(@index, _repo));
+  HandleLibGit2Output('git_repository_index', git_repository_index(@index, _repo));
   Try
-    HandleGitLibOutput('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(inFileName.Replace('\', '/')))));
+    HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(inFileName.Replace('\', '/')))));
 
-    HandleGitLibOutput('git_index_write', git_index_write(index));
+    HandleLibGit2Output('git_index_write', git_index_write(index));
   Finally
     git_index_free(index);
 
-    DoGitLibCall('git_index_free');
+    DoLibGit2Call('git_index_free');
   End;
 End;
 
 Procedure TAEGitRepository.Stash_Drop(Const inStashIndex: Integer);
 Begin
-  HandleGitLibOutput('git_stash_drop', git_stash_drop(_repo, size_t(inStashIndex)));
+  HandleLibGit2Output('git_stash_drop', git_stash_drop(_repo, size_t(inStashIndex)));
 End;
 
 Procedure TAEGitRepository.Stash_List(Const inStashList: TAEGitStashList);
 Begin
-  HandleGitLibOutput('git_stash_foreach', git_stash_foreach(_repo, @GitLibStashListCallback, @inStashList));
+  HandleLibGit2Output('git_stash_foreach', git_stash_foreach(_repo, @GitLibStashListCallback, @inStashList));
 End;
 
 Procedure TAEGitRepository.Stash_Pop(Const inStashIndex: Integer);
 Var
   options: git_stash_apply_options;
 Begin
-  HandleGitLibOutput('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
+  HandleLibGit2Output('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
   options.flags := 0;
 
-  HandleGitLibOutput('git_stash_pop', git_stash_pop(_repo, size_t(inStashIndex), @options));
+  HandleLibGit2Output('git_stash_pop', git_stash_pop(_repo, size_t(inStashIndex), @options));
 End;
 
 Procedure TAEGitRepository.Stash_Push(Const inStashMessage: String);
@@ -206,17 +206,17 @@ Var
   signature: Pgit_signature;
   oid: git_oid;
 Begin
-  HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
+  HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
   Try
-    HandleGitLibOutput('git_stash_save', git_stash_save(@oid, _repo, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+    HandleLibGit2Output('git_stash_save', git_stash_save(@oid, _repo, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
   Finally
     git_signature_free(signature);
 
-    DoGitLibCall('git_signature_free');
+    DoLibGit2Call('git_signature_free');
   End;
 End;
 
-Function TAEGitRepository.HandleGitLibOutput(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+Function TAEGitRepository.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
 Var
   err: PGit_Error;
   errorcode: TAEGitErrorCode;
@@ -299,7 +299,7 @@ Begin
       errorcode := geUnknown;
   End;
 
-  DoGitLibCall(inMethod, errorcode);
+  DoLibGit2Call(inMethod, errorcode);
 
   Result := errorcode = geOK;
 
@@ -307,7 +307,7 @@ Begin
   Begin
     err := git_error_last;
 
-    DoGitLibCall('git_error_last');
+    DoLibGit2Call('git_error_last');
 
     Case err.klass Of
       GIT_ERROR_NONE:
@@ -404,47 +404,47 @@ Begin
   _currentbranch := '';
   tmp := nil;
 
-  If HandleGitLibOutput('git_repository_head', git_repository_head(@ref, _repo), False) Then
+  If HandleLibGit2Output('git_repository_head', git_repository_head(@ref, _repo), False) Then
   Try
-    If HandleGitLibOutput('git_reference_is_branch', git_reference_is_branch(ref), False) Then
+    If HandleLibGit2Output('git_reference_is_branch', git_reference_is_branch(ref), False) Then
     Begin
       // Detached HEAD
 
       oid := git_reference_target(ref);
 
-      DoGitLibCall('git_reference_target');
+      DoLibGit2Call('git_reference_target');
 
       If Assigned(oid) Then
       Begin
         _currentbranch := String(UTF8String(git_oid_tostr_s(oid)));
 
-        DoGitLibCall('git_oid_tostr_s');
+        DoLibGit2Call('git_oid_tostr_s');
       End;
     End
     Else
-    If HandleGitLibOutput('git_branch_name', git_branch_name(@tmp, ref), False) Then
+    If HandleLibGit2Output('git_branch_name', git_branch_name(@tmp, ref), False) Then
         _currentbranch := String(UTF8String(tmp));
   Finally
     git_reference_free(ref);
 
-    DoGitLibCall('git_reference_free');
+    DoLibGit2Call('git_reference_free');
   End
   Else
   Begin
     // Try HEAD for worktree
 
-    If HandleGitLibOutput('git_repository_head_for_worktree', git_repository_head_for_worktree(@ref, _repo, nil), False) Then
+    If HandleLibGit2Output('git_repository_head_for_worktree', git_repository_head_for_worktree(@ref, _repo, nil), False) Then
     Try
       tmp := git_reference_shorthand(ref);
 
-      DoGitLibCall('git_reference_shorthand');
+      DoLibGit2Call('git_reference_shorthand');
 
       If Assigned(tmp) Then
         _currentbranch := String(UTF8String(tmp));
     Finally
       git_reference_free(ref);
 
-      DoGitLibCall('git_reference_free');
+      DoLibGit2Call('git_reference_free');
     End
     Else
     Begin
@@ -452,7 +452,7 @@ Begin
 
       s := String(UTF8String(git_repository_workdir(_repo))).Replace('/', PathDelim);
 
-      DoGitLibCall('git_repository_workdir');
+      DoLibGit2Call('git_repository_workdir');
 
       s := IncludeTrailingPathDelimiter(s) + '.git\HEAD';
 
@@ -472,16 +472,16 @@ Begin
 
     _currentbranch := 'master';
 
-    HandleGitLibOutput('git_config_open_default', git_config_open_default(@cfg));
+    HandleLibGit2Output('git_config_open_default', git_config_open_default(@cfg));
     Try
       tmp := nil;
 
-      If HandleGitLibOutput('git_config_get_string', git_config_get_string(@tmp, cfg, 'init.defaultBranch'), False) Then
+      If HandleLibGit2Output('git_config_get_string', git_config_get_string(@tmp, cfg, 'init.defaultBranch'), False) Then
         _currentbranch := String(UTF8String(tmp));
     Finally
       git_config_free(cfg);
 
-      DoGitLibCall('git_config_free');
+      DoLibGit2Call('git_config_free');
     End;
   End;
 End;
@@ -496,20 +496,20 @@ Var
   a: Integer;
   remote: PAnsiChar;
 Begin
-  HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
+  HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@localoid, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
 
-  HandleGitLibOutput('git_repository_head', git_repository_head(@headref, _repo));
+  HandleLibGit2Output('git_repository_head', git_repository_head(@headref, _repo));
   Try
-    If HandleGitLibOutput('git_branch_upstream', git_branch_upstream(@remoteref, headref), False) Then
+    If HandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, headref), False) Then
     Try
       remote := git_reference_name(remoteref);
 
-      DoGitLibCall('git_reference_name');
+      DoLibGit2Call('git_reference_name');
 
-      If HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, remote), False) Then
+      If HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, _repo, remote), False) Then
       Begin
         // Remote branch exist, use git_graph_ahead_behind
-        HandleGitLibOutput('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
+        HandleLibGit2Output('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, _repo, @localoid, @remoteoid));
 
         _incomingcommits := behind;
         _outgoingcommits := ahead;
@@ -517,7 +517,7 @@ Begin
     Finally
       git_reference_free(remoteref);
 
-      DoGitLibCall('git_reference_free');
+      DoLibGit2Call('git_reference_free');
     End
     Else
     Begin
@@ -526,52 +526,52 @@ Begin
       _incomingcommits := -1;
       _outgoingcommits := 0;
 
-      HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walk, _repo));
+      HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, _repo));
       Try
-        HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walk, @localoid));
+        HandleLibGit2Output('git_revwalk_push', git_revwalk_push(walk, @localoid));
 
-        HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
+        HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
         Try
-          While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, refiterator), False) Do
+          While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, refiterator), False) Do
           Begin
             Try
               // Skip symbolic refs such as refs/remotes/origin/HEAD
               a := git_reference_type(ref);
 
-              DoGitLibCall('git_reference_type');
+              DoLibGit2Call('git_reference_type');
 
               If a = GIT_REFERENCE_DIRECT Then
               Begin
                 remoteoid := git_reference_target(Ref)^;
 
-                DoGitLibCall('git_reference_target');
+                DoLibGit2Call('git_reference_target');
 
-                HandleGitLibOutput('git_revwalk_hide', git_revwalk_hide(walk, @remoteoid));
+                HandleLibGit2Output('git_revwalk_hide', git_revwalk_hide(walk, @remoteoid));
               End;
             Finally
               git_reference_free(ref);
 
-              DoGitLibCall('git_reference_free');
+              DoLibGit2Call('git_reference_free');
             End;
           End;
         Finally
           git_reference_iterator_free(refiterator);
 
-          DoGitLibCall('git_reference_iterator_free');
+          DoLibGit2Call('git_reference_iterator_free');
         End;
 
-        While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
+        While HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
           Inc(_outgoingcommits);
       Finally
         git_revwalk_free(walk);
 
-        DoGitLibCall('git_revwalk_free');
+        DoLibGit2Call('git_revwalk_free');
       End;
     End;
   Finally
     git_reference_free(headref);
 
-    DoGitLibCall('git_reference_free');
+    DoLibGit2Call('git_reference_free');
   End;
 End;
 
@@ -588,9 +588,9 @@ Begin
   If inRemote.IsEmpty Then
     inRemote := Self.GetDefaultRemoteName;
 
-  HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
+  HandleLibGit2Output('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
-    HandleGitLibOutput('git_fetch_options_init', git_fetch_options_init(@options, GIT_FETCH_OPTIONS_VERSION));
+    HandleLibGit2Output('git_fetch_options_init', git_fetch_options_init(@options, GIT_FETCH_OPTIONS_VERSION));
 
     options.callbacks.payload := @_authmethod;
     options.callbacks.credentials := GitLibAuthCallback;
@@ -598,7 +598,7 @@ Begin
     If inDownloadTags Then
       options.download_tags := GIT_REMOTE_DOWNLOAD_TAGS_ALL;
 
-    HandleGitLibOutput('git_remote_get_fetch_refspecs', git_remote_get_fetch_refspecs(@specs, remote));
+    HandleLibGit2Output('git_remote_get_fetch_refspecs', git_remote_get_fetch_refspecs(@specs, remote));
     Try
       hastagrefs := False;
 
@@ -633,7 +633,7 @@ Begin
     Finally
       git_strarray_dispose(@specs);
 
-      DoGitLibCall('git_strarray_dispose');
+      DoLibGit2Call('git_strarray_dispose');
     End;
 
     fetchspecs.Count := Length(refs);
@@ -643,11 +643,11 @@ Begin
     Else
       fetchspecs.strings := nil;
 
-    HandleGitLibOutput('git_remote_fetch', git_remote_fetch(remote, @fetchspecs, @options, nil));
+    HandleLibGit2Output('git_remote_fetch', git_remote_fetch(remote, @fetchspecs, @options, nil));
   Finally
     git_remote_free(remote);
 
-    DoGitLibCall('git_remote_free');
+    DoLibGit2Call('git_remote_free');
   End;
 
   Self.UpdateCommitCount(inRemote);
@@ -666,29 +666,29 @@ Var
 Begin
   // Tags
 
-  HandleGitLibOutput('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, 'refs/tags/*'));
+  HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, 'refs/tags/*'));
   Try
-    While HandleGitLibOutput('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
     Try
-      HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+      HandleLibGit2Output('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
       Try
         oid := git_object_id(commit);
 
-        DoGitLibCall('git_object_id');
+        DoLibGit2Call('git_object_id');
 
         git_oid_tostr(sha, SizeOf(sha), oid);
 
-        DoGitLibCall('git_oid_tostr');
+        DoLibGit2Call('git_oid_tostr');
 
         tmp := git_reference_shorthand(ref);
 
-        DoGitLibCall('git_reference_shorthand');
+        DoLibGit2Call('git_reference_shorthand');
 
         outDecorationCache.AddItem(String(UTF8String(sha)), dtTag, String(UTF8String(tmp)));
       Finally
         git_object_free(commit);
 
-        DoGitLibCall('git_object_free');
+        DoLibGit2Call('git_object_free');
       End
     Finally
       git_reference_free(ref);
@@ -696,66 +696,66 @@ Begin
   Finally
     git_reference_iterator_free(iterator);
 
-    DoGitLibCall('git_reference_iterator_free');
+    DoLibGit2Call('git_reference_iterator_free');
   End;
 
   // Branches
-  HandleGitLibOutput('git_branch_iterator_new', git_branch_iterator_new(@branchiterator, _repo, GIT_BRANCH_ALL));
+  HandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@branchiterator, _repo, GIT_BRANCH_ALL));
   Try
-    While HandleGitLibOutput('git_branch_next', git_branch_next(@ref, @branchtype, branchiterator), False) Do
+    While HandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtype, branchiterator), False) Do
     Try
-      HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+      HandleLibGit2Output('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
       Try
         oid := git_object_id(commit);
 
-        DoGitLibCall('git_object_id');
+        DoLibGit2Call('git_object_id');
 
         git_oid_tostr(sha, SizeOf(sha), oid);
 
-        DoGitLibCall('git_oid_tostr');
+        DoLibGit2Call('git_oid_tostr');
 
-        HandleGitLibOutput('git_branch_name', git_branch_name(@tmp, ref));
+        HandleLibGit2Output('git_branch_name', git_branch_name(@tmp, ref));
 
         outDecorationCache.AddItem(String(UTF8String(sha)), dtBranch, String(UTF8String(tmp)));
       Finally
         git_object_free(commit);
 
-        DoGitLibCall('git_object_free');
+        DoLibGit2Call('git_object_free');
       End;
     Finally
       git_reference_free(ref);
 
-      DoGitLibCall('git_reference_free');
+      DoLibGit2Call('git_reference_free');
     End;
   Finally
     git_branch_iterator_free(branchiterator);
 
-    DoGitLibCall('git_branch_iterator_free');
+    DoLibGit2Call('git_branch_iterator_free');
   End;
 
   // Heads
-  HandleGitLibOutput('git_repository_head', git_repository_head(@ref, _repo));
+  HandleLibGit2Output('git_repository_head', git_repository_head(@ref, _repo));
   Try
-    HandleGitLibOutput('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
+    HandleLibGit2Output('git_reference_peel', git_reference_peel(@commit, ref, GIT_OBJECT_COMMIT));
     Try
       oid := git_object_id(commit);
 
-      DoGitLibCall('git_object_id');
+      DoLibGit2Call('git_object_id');
 
       git_oid_tostr(sha, SizeOf(sha), oid);
 
-      DoGitLibCall('git_oid_tostr');
+      DoLibGit2Call('git_oid_tostr');
 
       outDecorationCache.Head := String(UTF8String(sha));
     Finally
       git_object_free(commit);
 
-      DoGitLibCall('git_object_free');
+      DoLibGit2Call('git_object_free');
     End;
   Finally
     git_reference_free(ref);
 
-    DoGitLibCall('git_reference_free');
+    DoLibGit2Call('git_reference_free');
   End;
 End;
 
@@ -772,48 +772,48 @@ Begin
 
   SplitBranchName(inBranchName, remote);
 
-  HandleGitLibOutput('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
+  HandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
   options.checkout_strategy := GIT_CHECKOUT_SAFE;
 
   // Try local branch first
-  If Not HandleGitLibOutput('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))), False) Then
+  If Not HandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))), False) Then
   Begin
-    HandleGitLibOutput('git_reference_lookup', git_reference_lookup(@remotebranch, _repo, PAnsiChar(UTF8String('refs/remotes/' + remote + '/' + inBranchName))));
+    HandleLibGit2Output('git_reference_lookup', git_reference_lookup(@remotebranch, _repo, PAnsiChar(UTF8String('refs/remotes/' + remote + '/' + inBranchName))));
     Try
-      HandleGitLibOutput('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@commit, _repo, remotebranch));
+      HandleLibGit2Output('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@commit, _repo, remotebranch));
       Try
-        HandleGitLibOutput('git_branch_create_from_annotated', git_branch_create_from_annotated(@localbranch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, 0));
+        HandleLibGit2Output('git_branch_create_from_annotated', git_branch_create_from_annotated(@localbranch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, 0));
         Try
-          HandleGitLibOutput('git_branch_set_upstream', git_branch_set_upstream(localbranch, PAnsiChar(UTF8String(remote + '/' + inBranchName))));
+          HandleLibGit2Output('git_branch_set_upstream', git_branch_set_upstream(localbranch, PAnsiChar(UTF8String(remote + '/' + inBranchName))));
         Finally
           git_reference_free(localbranch);
 
-          DoGitLibCall('git_reference_free');
+          DoLibGit2Call('git_reference_free');
         End;
       Finally
         git_annotated_commit_free(commit);
 
-        DoGitLibCall('git_annotated_commit_free');
+        DoLibGit2Call('git_annotated_commit_free');
       End;
     Finally
       git_reference_free(remotebranch);
 
-      DoGitLibCall('git_reference_free');
+      DoLibGit2Call('git_reference_free');
     End;
 
     // Now lookup the newly-created local branch
-    HandleGitLibOutput('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
+    HandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, _repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
   End;
 
   Try
-    HandleGitLibOutput('git_checkout_tree', git_checkout_tree(_repo, obj, @options));
+    HandleLibGit2Output('git_checkout_tree', git_checkout_tree(_repo, obj, @options));
   Finally
     git_object_free(obj);
 
-    DoGitLibCall('git_object_free');
+    DoLibGit2Call('git_object_free');
   End;
 
-  HandleGitLibOutput('git_repository_set_head', git_repository_set_head(_repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
+  HandleLibGit2Output('git_repository_set_head', git_repository_set_head(_repo, PAnsiChar(UTF8String('refs/heads/' + inBranchName))));
 
   _currentbranch := inBranchName;
   // UpdateCurrentBranchName;
@@ -860,13 +860,13 @@ Begin
 
     Result := git_credential_ssh_key_new(outGitCredential, sshuser, pubkey, privkey, sshpass);
 
-    DoGitLibCall('git_credential_ssh_key_new');
+    DoLibGit2Call('git_credential_ssh_key_new');
   End
   Else If gaUserPassPlainText In inAllowedTypes Then
   Begin
     Result := git_credential_userpass_plaintext_new(outGitCredential, sshuser, sshpass);
 
-    DoGitLibCall('git_credential_userpass_plaintext_new');
+    DoLibGit2Call('git_credential_userpass_plaintext_new');
   End
   Else
     Result := -1;
@@ -879,7 +879,7 @@ Begin
 
   git_repository_free(_repo);
 
-  DoGitLibCall('git_repository_free');
+  DoLibGit2Call('git_repository_free');
 
   _repo := nil;
 End;
@@ -890,24 +890,24 @@ Var
   rebase: Pgit_rebase;
   signature: Pgit_signature;
 Begin
-  HandleGitLibOutput('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
+  HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
-  HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
+  HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
   Try
-    HandleGitLibOutput('git_rebase_open', git_rebase_open(@rebase, _repo, @options));
+    HandleLibGit2Output('git_rebase_open', git_rebase_open(@rebase, _repo, @options));
     Try
-      HandleGitLibOutput('git_rebase_abort', git_rebase_abort(rebase));
+      HandleLibGit2Output('git_rebase_abort', git_rebase_abort(rebase));
 
-      HandleGitLibOutput('git_rebase_finish', git_rebase_finish(rebase, signature));
+      HandleLibGit2Output('git_rebase_finish', git_rebase_finish(rebase, signature));
     Finally
       git_rebase_free(rebase);
 
-      DoGitLibCall('git_rebase_free');
+      DoLibGit2Call('git_rebase_free');
     End;
   Finally
     git_signature_free(signature);
 
-    DoGitLibCall('git_signature_free');
+    DoLibGit2Call('git_signature_free');
   End;
 End;
 
@@ -918,22 +918,22 @@ Var
   oid: git_oid;
 Begin
   Repeat
-    If Not HandleGitLibOutput('git_rebase_next', git_rebase_next(@rebaseop, inRebase), False) Then
+    If Not HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, inRebase), False) Then
       Break;
 
-    HandleGitLibOutput('git_repository_index', git_repository_index(@index, _repo));
+    HandleLibGit2Output('git_repository_index', git_repository_index(@index, _repo));
     Try
       If git_index_has_conflicts(index) <> 0 Then
         Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
     Finally
-      DoGitLibCall('git_index_has_conflicts');
+      DoLibGit2Call('git_index_has_conflicts');
 
       git_index_free(index);
 
-      DoGitLibCall('git_index_free');
+      DoLibGit2Call('git_index_free');
     End;
 
-    HandleGitLibOutput('git_rebase_commit', git_rebase_commit(@oid, inRebase, nil, inSignature, nil, nil));
+    HandleLibGit2Output('git_rebase_commit', git_rebase_commit(@oid, inRebase, nil, inSignature, nil, nil));
   Until False;
 End;
 
@@ -943,24 +943,24 @@ Var
   rebase: Pgit_rebase;
   signature: Pgit_signature;
 Begin
-  HandleGitLibOutput('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
+  HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
-  HandleGitLibOutput('git_rebase_open', git_rebase_open(@rebase, _repo, @options));
+  HandleLibGit2Output('git_rebase_open', git_rebase_open(@rebase, _repo, @options));
   Try
-    HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
+    HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
     Try
       DoRebase(rebase, signature);
 
-      HandleGitLibOutput('git_rebase_finish', git_rebase_finish(rebase, signature));
+      HandleLibGit2Output('git_rebase_finish', git_rebase_finish(rebase, signature));
     Finally
       git_signature_free(signature);
 
-      DoGitLibCall('git_signature_free');
+      DoLibGit2Call('git_signature_free');
     End;
   Finally
     git_rebase_free(rebase);
 
-    DoGitLibCall('git_rebase_free');
+    DoLibGit2Call('git_rebase_free');
   End;
 End;
 
@@ -969,15 +969,15 @@ Var
   options: git_rebase_options;
   rebase: Pgit_rebase;
 Begin
-  HandleGitLibOutput('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
+  HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
-  Result := HandleGitLibOutput('git_rebase_open', git_rebase_open(@rebase, _repo, @options), False);
+  Result := HandleLibGit2Output('git_rebase_open', git_rebase_open(@rebase, _repo, @options), False);
 
   If Result Then
   Begin
     git_rebase_free(rebase);
 
-    DoGitLibCall('git_rebase_free');
+    DoLibGit2Call('git_rebase_free');
   End;
 End;
 
@@ -985,13 +985,13 @@ Procedure TAEGitRepository.Revert_Last_Commit(Const inCommitCount: Integer);
 Var
   target: Pgit_object;
 Begin
-  HandleGitLibOutput('git_revparse_single', git_revparse_single(@target, _repo, PAnsiChar(AnsiString('HEAD~' + inCommitCount.ToString))));
+  HandleLibGit2Output('git_revparse_single', git_revparse_single(@target, _repo, PAnsiChar(AnsiString('HEAD~' + inCommitCount.ToString))));
   Try
-    HandleGitLibOutput('git_reset', git_reset(_repo, target, GIT_RESET_SOFT, nil));
+    HandleLibGit2Output('git_reset', git_reset(_repo, target, GIT_RESET_SOFT, nil));
   Finally
     git_object_free(target);
 
-    DoGitLibCall('git_object_free');
+    DoLibGit2Call('git_object_free');
   End;
 End;
 
@@ -1016,24 +1016,24 @@ Var
   ref, branch: Pgit_reference;
   commit: Pgit_commit;
 Begin
-  HandleGitLibOutput('git_repository_head', git_repository_head(@ref, _repo));
+  HandleLibGit2Output('git_repository_head', git_repository_head(@ref, _repo));
   Try
-    HandleGitLibOutput('git_commit_lookup', git_commit_lookup(@commit, _repo, git_reference_target(ref)));
+    HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, _repo, git_reference_target(ref)));
     Try
-      HandleGitLibOutput('git_branch_create', git_branch_create(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
+      HandleLibGit2Output('git_branch_create', git_branch_create(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
 
       git_reference_free(branch);
 
-      DoGitLibCall('git_reference_free');
+      DoLibGit2Call('git_reference_free');
     Finally
       git_commit_free(Commit);
 
-      DoGitLibCall('git_commit_free');
+      DoLibGit2Call('git_commit_free');
     End;
   Finally
     git_reference_free(ref);
 
-    DoGitLibCall('git_reference_free');
+    DoLibGit2Call('git_reference_free');
   End;
 End;
 
@@ -1041,13 +1041,13 @@ Procedure TAEGitRepository.DeleteBranch(Const inBranchName: String);
 Var
   branch: Pgit_reference;
 Begin
-  HandleGitLibOutput('git_branch_lookup', git_branch_lookup(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), GIT_BRANCH_LOCAL));
+  HandleLibGit2Output('git_branch_lookup', git_branch_lookup(@branch, _repo, PAnsiChar(UTF8String(inBranchName)), GIT_BRANCH_LOCAL));
   Try
-    HandleGitLibOutput('git_branch_delete', git_branch_delete(branch));
+    HandleLibGit2Output('git_branch_delete', git_branch_delete(branch));
   Finally
     git_reference_free(branch);
 
-    DoGitLibCall('git_reference_free');
+    DoLibGit2Call('git_reference_free');
   End;
 End;
 
@@ -1061,7 +1061,7 @@ Begin
   inherited;
 End;
 
-Procedure TAEGitRepository.DoGitLibCall(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
+Procedure TAEGitRepository.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
   If Assigned(_ongitlibcall) Then
     _ongitlibcall(Self, inMethod, inErrorCode);
@@ -1087,14 +1087,14 @@ Begin
       Raise ENotImplemented.Create('This branch type is not implemented yet!');
   End;
 
-  HandleGitLibOutput('git_branch_iterator_new', git_branch_iterator_new(@iterator, _repo, branchtypeinput));
+  HandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, _repo, branchtypeinput));
   Try
     Repeat
-      If Not HandleGitLibOutput('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
+      If Not HandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
         Break;
 
       Try
-        If HandleGitLibOutput('git_branch_name', git_branch_name(@branchname, ref), False) Then
+        If HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
         Begin
           SetLength(Result, Length(Result) + 1);
 
@@ -1103,13 +1103,13 @@ Begin
       Finally
         git_reference_free(ref);
 
-        DoGitLibCall('git_reference_free');
+        DoLibGit2Call('git_reference_free');
       End;
     Until False;
   Finally
     git_branch_iterator_free(iterator);
 
-    DoGitLibCall('git_branch_iterator_free');
+    DoLibGit2Call('git_branch_iterator_free');
   End;
 End;
 
@@ -1138,21 +1138,21 @@ Var
   end;
 
 Begin
-  HandleGitLibOutput('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
+  HandleLibGit2Output('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
 
   options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS Or GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
 
-  HandleGitLibOutput('git_status_list_new', git_status_list_new(@statuslist, _repo, @options));
+  HandleLibGit2Output('git_status_list_new', git_status_list_new(@statuslist, _repo, @options));
   Try
     count := git_status_list_entrycount(statuslist);
 
-    DoGitLibCall('git_status_list_entrycount');
+    DoLibGit2Call('git_status_list_entrycount');
 
     For b := 0 To count - 1 Do
     Begin
       status := git_status_byindex(statuslist, b);
 
-      DoGitLibCall('git_status_byindex');
+      DoLibGit2Call('git_status_byindex');
 
       If status.status = GIT_STATUS_IGNORED Then
         Continue;
@@ -1216,7 +1216,7 @@ Begin
   Finally
     git_status_list_free(statuslist);
 
-    DoGitLibCall('git_status_list_free');
+    DoLibGit2Call('git_status_list_free');
   End;
 End;
 
@@ -1239,75 +1239,75 @@ Begin
   Try
     FillDecorationCache(cache);
 
-    HandleGitLibOutput('git_revwalk_new', git_revwalk_new(@walker, _repo));
+    HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walker, _repo));
     Try
-      HandleGitLibOutput('git_revwalk_sorting', git_revwalk_sorting(walker, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+      HandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walker, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
 
       If Not inStartCommitHash.IsEmpty Then
       Begin
-        HandleGitLibOutput('git_oid_fromstr', git_oid_fromstr(@startoid, PAnsiChar(UTF8String(inStartCommitHash))));
+        HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@startoid, PAnsiChar(UTF8String(inStartCommitHash))));
 
-        HandleGitLibOutput('git_revwalk_push', git_revwalk_push(walker, @startoid));
+        HandleLibGit2Output('git_revwalk_push', git_revwalk_push(walker, @startoid));
       End
       Else
       Begin
-        HandleGitLibOutput('git_revwalk_push_head', git_revwalk_push_head(walker));
+        HandleLibGit2Output('git_revwalk_push_head', git_revwalk_push_head(walker));
 
-        HandleGitLibOutput('git_revwalk_push_ref', git_revwalk_push_ref(walker, PAnsiChar(UTF8String('refs/remotes/' + GetDefaultRemoteName + '/' + _currentbranch))));
+        HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walker, PAnsiChar(UTF8String('refs/remotes/' + GetDefaultRemoteName + '/' + _currentbranch))));
       End;
 
-      While HandleGitLibOutput('git_revwalk_next', git_revwalk_next(@currentoid, walker), False) Do
+      While HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@currentoid, walker), False) Do
       Begin
         If (inCommitAmount <> 0) And (outCommitList.Count >= inCommitAmount) Then
           Exit;
 
         git_oid_tostr(sha, SizeOf(sha), @currentoid);
 
-        DoGitLibCall('git_oid_tostr');
+        DoLibGit2Call('git_oid_tostr');
 
         If outCommitList.ContainsKey(String(UTF8String(sha))) Then
           Continue;
 
-        HandleGitLibOutput('git_commit_lookup', git_commit_lookup(@commit, _repo, @currentoid));
+        HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, _repo, @currentoid));
         Try
           hash := String(UTF8String(sha));
 
           signature := git_commit_author(commit);
 
-          DoGitLibCall('git_commit_author');
+          DoLibGit2Call('git_commit_author');
 
           author := String(UTF8String(signature^.name_));
           authoremail := String(UTF8String(signature^.email));
 
           signature := git_commit_committer(commit);
 
-          DoGitLibCall('git_commit_committer');
+          DoLibGit2Call('git_commit_committer');
 
           committer := String(UTF8String(signature^.name_));
           committeremail := String(UTF8String(signature^.email));
 
           summary := String(UTF8String(git_commit_summary(commit)));
 
-          DoGitLibCall('git_commit_summary');
+          DoLibGit2Call('git_commit_summary');
 
           message := String(UTF8String(git_commit_message(commit)));
 
-          DoGitLibCall('git_commit_message');
+          DoLibGit2Call('git_commit_message');
 
           If message = summary Then
             message := '';
 
           datetime := UnixToDateTime(git_commit_time(commit), True);
 
-          DoGitLibCall('git_commit_time');
+          DoLibGit2Call('git_commit_time');
 
           datetime := IncMinute(datetime, git_commit_time_offset(commit));
 
-          DoGitLibCall('git_commit_time_offset');
+          DoLibGit2Call('git_commit_time_offset');
 
           parentcount := git_commit_parentcount(commit);
 
-          DoGitLibCall('git_commit_parentcount');
+          DoLibGit2Call('git_commit_parentcount');
 
           SetLength(parentcommits, parentcount);
 
@@ -1315,11 +1315,11 @@ Begin
           Begin
             parentoid := git_commit_parent_id(commit, a);
 
-            DoGitLibCall('git_commit_parent_id');
+            DoLibGit2Call('git_commit_parent_id');
 
             git_oid_tostr(sha, SizeOf(sha), parentoid);
 
-            DoGitLibCall('git_oid_tostr');
+            DoLibGit2Call('git_oid_tostr');
 
             parentcommits[a] := String(UTF8String(sha));
           End;
@@ -1341,13 +1341,13 @@ Begin
         Finally
           git_commit_free(commit);
 
-          DoGitLibCall('git_commit_free');
+          DoLibGit2Call('git_commit_free');
         End;
       End;
     Finally
       git_revwalk_free(walker);
 
-      DoGitLibCall('git_revwalk_free');
+      DoLibGit2Call('git_revwalk_free');
     End;
   Finally
     FreeAndNil(cache);
@@ -1360,14 +1360,14 @@ Var
 Begin
   Result := '';
 
-  HandleGitLibOutput('git_remote_list', git_remote_list(@remotes, _repo));
+  HandleLibGit2Output('git_remote_list', git_remote_list(@remotes, _repo));
   Try
     If remotes.Count > 0 Then
       Result := String(UTF8String(remotes.strings^));
   Finally
     git_strarray_dispose(@remotes);
 
-    DoGitLibCall('git_strarray_dispose');
+    DoLibGit2Call('git_strarray_dispose');
   End;
 End;
 
@@ -1378,20 +1378,20 @@ Var
   buf: PAnsiChar;
   utf8patch: UTF8String;
 Begin
-  HandleGitLibOutput('git_apply_options_init', git_apply_options_init(@options, GIT_APPLY_OPTIONS_VERSION));
+  HandleLibGit2Output('git_apply_options_init', git_apply_options_init(@options, GIT_APPLY_OPTIONS_VERSION));
 
   FillChar(buf, SizeOf(buf), 0);
 
   utf8patch := UTF8String(inPatch);
   buf := PAnsiChar(utf8patch);
 
-  HandleGitLibOutput('git_diff_from_buffer', git_diff_from_buffer(@diff, buf, Length(buf)));
+  HandleLibGit2Output('git_diff_from_buffer', git_diff_from_buffer(@diff, buf, Length(buf)));
   Try
-    HandleGitLibOutput('git_apply', git_apply(_repo, diff, GIT_APPLY_LOCATION_WORKDIR, @options));
+    HandleLibGit2Output('git_apply', git_apply(_repo, diff, GIT_APPLY_LOCATION_WORKDIR, @options));
   Finally
     git_diff_free(diff);
 
-    DoGitLibCall('git_diff_free');
+    DoLibGit2Call('git_diff_free');
   End;
 End;
 
@@ -1412,18 +1412,18 @@ Begin
   Else
     diff := GetIndexWorkdirDiff(inFileNames);
   Try
-    HandleGitLibOutput('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
+    HandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
     Try
       Result := String(UTF8String(buf.ptr));
     Finally
       git_buf_dispose(@buf);
 
-      DoGitLibCall('git_buf_dispose');
+      DoLibGit2Call('git_buf_dispose');
     End;
   Finally
     git_diff_free(diff);
 
-    DoGitLibCall('git_diff_free');
+    DoLibGit2Call('git_diff_free');
   End;
 End;
 
@@ -1436,11 +1436,11 @@ Var
   filenames: TArray<PAnsiChar>;
   a: Integer;
 Begin
-  HandleGitLibOutput('git_revparse_single', git_revparse_single(@head, _repo, 'HEAD'));
+  HandleLibGit2Output('git_revparse_single', git_revparse_single(@head, _repo, 'HEAD'));
   Try
-    HandleGitLibOutput('git_commit_tree', git_commit_tree(@tree, Pgit_commit(head)));
+    HandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, Pgit_commit(head)));
     Try
-      HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
+      HandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
 
       SetLength(utffilenames, Length(inFileNames));
       SetLength(filenames, Length(inFileNames));
@@ -1454,16 +1454,16 @@ Begin
       options.pathspec.count := Length(filenames);
       options.pathspec.strings := @filenames[0];
 
-      HandleGitLibOutput('git_diff_tree_to_index', git_diff_tree_to_index(@Result, _repo, tree, nil, @options));
+      HandleLibGit2Output('git_diff_tree_to_index', git_diff_tree_to_index(@Result, _repo, tree, nil, @options));
     Finally
       git_tree_free(tree);
 
-      DoGitLibCall('git_tree_free');
+      DoLibGit2Call('git_tree_free');
     End;
   Finally
     git_object_free(head);
 
-    DoGitLibCall('git_object_free');
+    DoLibGit2Call('git_object_free');
   End;
 End;
 
@@ -1474,7 +1474,7 @@ Var
   filenames: TArray<PAnsiChar>;
   a: Integer;
 Begin
-  HandleGitLibOutput('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
+  HandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
 
   SetLength(utffilenames, Length(inFileNames));
   SetLength(filenames, Length(inFileNames));
@@ -1488,7 +1488,7 @@ Begin
   options.pathspec.count := Length(filenames);
   options.pathspec.strings := @filenames[0];
 
-  HandleGitLibOutput('git_diff_index_to_workdir', git_diff_index_to_workdir(@Result, _repo, nil, @options));
+  HandleLibGit2Output('git_diff_index_to_workdir', git_diff_index_to_workdir(@Result, _repo, nil, @options));
 End;
 
 Procedure TAEGitRepository.OpenGitRepository;
@@ -1496,7 +1496,7 @@ Begin
   If Assigned(_repo) Then
     Raise EAEGitException.Create(geUnknown, 'git_repository_open', ecInternal, 'A repository is already open!');
 
-  HandleGitLibOutput('git_repository_open', git_repository_open(@_repo, PAnsiChar(UTF8String(_repodir))));
+  HandleLibGit2Output('git_repository_open', git_repository_open(@_repo, PAnsiChar(UTF8String(_repodir))));
 
   Self.UpdateCurrentBranchName;
 End;
@@ -1515,11 +1515,11 @@ Begin
   If inRemote.IsEmpty Then
     inRemote := Self.GetDefaultRemoteName;
 
-  HandleGitLibOutput('git_push_options_init', git_push_options_init(@options, GIT_PUSH_OPTIONS_VERSION));
+  HandleLibGit2Output('git_push_options_init', git_push_options_init(@options, GIT_PUSH_OPTIONS_VERSION));
   options.callbacks.payload := @_authmethod;
   options.callbacks.credentials := GitLibAuthCallback;
 
-  HandleGitLibOutput('git_remote_init_callbacks', git_remote_init_callbacks(@callbacks, GIT_REMOTE_CALLBACKS_VERSION));
+  HandleLibGit2Output('git_remote_init_callbacks', git_remote_init_callbacks(@callbacks, GIT_REMOTE_CALLBACKS_VERSION));
   callbacks.payload := @_authmethod;
   callbacks.credentials := GitLibAuthCallback;
 
@@ -1528,44 +1528,44 @@ Begin
   refarray.strings := @ref;
   refarray.Count := 1;
 
-  HandleGitLibOutput('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
+  HandleLibGit2Output('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
   Try
-    HandleGitLibOutput('git_remote_connect', git_remote_connect(remote, GIT_DIRECTION_PUSH, @callbacks, nil, nil));
+    HandleLibGit2Output('git_remote_connect', git_remote_connect(remote, GIT_DIRECTION_PUSH, @callbacks, nil, nil));
     Try
-      HandleGitLibOutput('git_remote_push', git_remote_push(remote, @refarray, @options));
-      HandleGitLibOutput('git_reference_lookup', git_reference_lookup(@localref, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
+      HandleLibGit2Output('git_remote_push', git_remote_push(remote, @refarray, @options));
+      HandleLibGit2Output('git_reference_lookup', git_reference_lookup(@localref, _repo, PAnsiChar(UTF8String('refs/heads/' + _currentbranch))));
       Try
         oid := git_reference_target(LocalRef);
-        DoGitLibCall('git_reference_target');
+        DoLibGit2Call('git_reference_target');
 
-        If HandleGitLibOutput('git_reference_lookup', git_reference_lookup(@remoteref, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))), False) Then
+        If HandleLibGit2Output('git_reference_lookup', git_reference_lookup(@remoteref, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch))), False) Then
         Try
-          HandleGitLibOutput('git_reference_set_target', git_reference_set_target(@remoteref, remoteref, oid, nil));
+          HandleLibGit2Output('git_reference_set_target', git_reference_set_target(@remoteref, remoteref, oid, nil));
         Finally
           git_reference_free(remoteref);
 
-          DoGitLibCall('git_reference_free');
+          DoLibGit2Call('git_reference_free');
         End
         Else
         Try
-          HandleGitLibOutput('git_reference_create', git_reference_create(@remoteref, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch)), oid, 0, nil));
+          HandleLibGit2Output('git_reference_create', git_reference_create(@remoteref, _repo, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _currentbranch)), oid, 0, nil));
         Finally
           git_reference_free(RemoteRef);
 
-          DoGitLibCall('git_reference_free');
+          DoLibGit2Call('git_reference_free');
         End;
       Finally
         git_reference_free(LocalRef);
 
-        DoGitLibCall('git_reference_free');
+        DoLibGit2Call('git_reference_free');
       End;
     Finally
-      HandleGitLibOutput('git_remote_disconnect', git_remote_disconnect(remote));
+      HandleLibGit2Output('git_remote_disconnect', git_remote_disconnect(remote));
     End;
   Finally
     git_remote_free(remote);
 
-    DoGitLibCall('git_remote_free');
+    DoLibGit2Call('git_remote_free');
   End;
 End;
 
@@ -1583,47 +1583,47 @@ Begin
   If inBranch.IsEmpty Then
     inBranch := remote + '/' + _currentbranch;
 
-  HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
+  HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
   Try
-    HandleGitLibOutput('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
+    HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
-    HandleGitLibOutput('git_repository_head', git_repository_head(@head, _repo));
+    HandleLibGit2Output('git_repository_head', git_repository_head(@head, _repo));
 
-    HandleGitLibOutput('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@branch, _repo, head));
+    HandleLibGit2Output('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@branch, _repo, head));
     Try
-      HandleGitLibOutput('git_branch_lookup', git_branch_lookup(@ref, _repo, PAnsiChar(UTF8String(inBranch)), GIT_BRANCH_ALL));
+      HandleLibGit2Output('git_branch_lookup', git_branch_lookup(@ref, _repo, PAnsiChar(UTF8String(inBranch)), GIT_BRANCH_ALL));
       Try
-        HandleGitLibOutput('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@onto, _repo, ref));
+        HandleLibGit2Output('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@onto, _repo, ref));
         Try
-          HandleGitLibOutput('git_rebase_init', git_rebase_init(@rebase, _repo, branch, nil, onto, @options));
+          HandleLibGit2Output('git_rebase_init', git_rebase_init(@rebase, _repo, branch, nil, onto, @options));
           Try
             DoRebase(rebase, signature);
 
-            HandleGitLibOutput('git_rebase_finish', git_rebase_finish(rebase, signature));
+            HandleLibGit2Output('git_rebase_finish', git_rebase_finish(rebase, signature));
           Finally
             git_rebase_free(rebase);
 
-            DoGitLibCall('git_rebase_free');
+            DoLibGit2Call('git_rebase_free');
           End;
         Finally
           git_annotated_commit_free(onto);
 
-          DoGitLibCall('git_annotated_commit_free');
+          DoLibGit2Call('git_annotated_commit_free');
         End
       Finally
         git_reference_free(ref);
 
-        DoGitLibCall('git_reference_free');
+        DoLibGit2Call('git_reference_free');
       End;
     Finally
       git_annotated_commit_free(branch);
 
-      DoGitLibCall('git_annotated_commit_free');
+      DoLibGit2Call('git_annotated_commit_free');
     End;
   Finally
     git_signature_free(signature);
 
-    DoGitLibCall('git_signature_free');
+    DoLibGit2Call('git_signature_free');
   End;
 End;
 
@@ -1663,31 +1663,31 @@ var
   signature: Pgit_signature;
   parentcount: Integer;
 begin
-  HandleGitLibOutput('git_repository_index', git_repository_index(@index, _repo));
+  HandleLibGit2Output('git_repository_index', git_repository_index(@index, _repo));
   Try
-    HandleGitLibOutput('git_index_write_tree', git_index_write_tree(@treeoid, index));
+    HandleLibGit2Output('git_index_write_tree', git_index_write_tree(@treeoid, index));
   Finally
     git_index_free(index);
 
-    DoGitLibCall('git_index_free');
+    DoLibGit2Call('git_index_free');
   End;
 
-  HandleGitLibOutput('git_tree_lookup', git_tree_lookup(@tree, _repo, @treeoid));
+  HandleLibGit2Output('git_tree_lookup', git_tree_lookup(@tree, _repo, @treeoid));
   Try
     parentcount := 0;
     parents := nil;
     Try
-      If HandleGitLibOutput('git_reference_name_to_id', git_reference_name_to_id(@parentoid, _repo, 'HEAD'), False) And
-         HandleGitLibOutput('git_commit_lookup', git_commit_lookup(@parentcommit, _repo, @parentoid), False) Then
+      If HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@parentoid, _repo, 'HEAD'), False) And
+         HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, _repo, @parentoid), False) Then
       Begin
         parentsarray[0] := parentcommit;
         parents := @parentsarray[0];
         parentcount := 1;
       End;
 
-      HandleGitLibOutput('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
+      HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(_settings.FullName)), PAnsiChar(UTF8String(_settings.EMailAddress))));
       Try
-        HandleGitLibOutput('git_commit_create',
+        HandleLibGit2Output('git_commit_create',
           git_commit_create(
             @commitoid,
             _repo,
@@ -1704,21 +1704,21 @@ begin
       Finally
         git_signature_free(signature);
 
-        DoGitLibCall('git_signature_free');
+        DoLibGit2Call('git_signature_free');
       End;
     Finally
       If Assigned(parentcommit) then
       Begin
         git_commit_free(parentcommit);
 
-        DoGitLibCall('git_commit_free');
+        DoLibGit2Call('git_commit_free');
       End;
     End;
   Finally
     // tree might be nil in normal operations...?
     git_tree_free(tree);
 
-    DoGitLibCall('git_tree_free');
+    DoLibGit2Call('git_tree_free');
   End;
 End;
 
