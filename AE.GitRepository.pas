@@ -18,7 +18,7 @@ Type
     _authmethod: TMethod;
     _currentbranch: String;
     _incomingcommits: Integer;
-    _ongitlibcall: TAEGitLibCallLogEvent;
+    _onlibgit2call: TAELibGit2CallLogEvent;
     _outgoingcommits: Integer;
     _repo: Pgit_repository;
     _repodir: String;
@@ -68,7 +68,7 @@ Type
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
-    Property OnGitLibCall: TAEGitLibCallLogEvent Read _ongitlibcall Write _ongitlibcall;
+    Property OnLibGit2Call: TAELibGit2CallLogEvent Read _onlibgit2call Write _onlibgit2call;
     Property OutgoingCommits: Integer Read _outgoingcommits;
     Property Settings: TAEGitRepositorySettings Read _settings;
   End;
@@ -109,7 +109,7 @@ Begin
   If (allowed_types And GIT_CREDENTIAL_SSH_MEMORY) <> 0 Then
     Include(types, gaSshMemory);
 
-  Result := TGitLibAuthCallback(PMethod(payload)^)(out_, url, username_from_url, types);
+  Result := TAELibGit2AuthCallback(PMethod(payload)^)(out_, url, username_from_url, types);
 End;
 
 Function GitLibStashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
@@ -1006,7 +1006,7 @@ Begin
   _outgoingcommits := 0;
   _settings := TAEGitRepositorySettings.Create;
 
-  _ongitlibcall := nil;
+  _onlibgit2call := nil;
   _repo := nil;
   _repodir := '';
 End;
@@ -1063,8 +1063,8 @@ End;
 
 Procedure TAEGitRepository.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
-  If Assigned(_ongitlibcall) Then
-    _ongitlibcall(Self, inMethod, inErrorCode);
+  If Assigned(_onlibgit2call) Then
+    _onlibgit2call(Self, inMethod, inErrorCode);
 End;
 
 Function TAEGitRepository.BranchList(Const inBranchType: TAEGitBranchType): TArray<String>;

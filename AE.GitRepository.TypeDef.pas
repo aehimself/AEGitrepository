@@ -106,9 +106,9 @@ Type
 
   TAEGitAuthTypes = Set Of TAEGitAuthType;
 
-  TAEGitLibCallLogEvent = Procedure(Const inSender: TObject; Const inMethod: String; Const inErrorCode: TAEGitErrorCode) Of Object;
+  TAELibGit2CallLogEvent = Procedure(Const inSender: TObject; Const inMethod: String; Const inErrorCode: TAEGitErrorCode) Of Object;
 
-  TGitLibAuthCallback = Function(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer Of Object;
+  TAELibGit2AuthCallback = Function(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer Of Object;
 
   TAEGitFileStatus = ( gfsCurrent, gfsStagedNew, gfsStagedModified, gfsStagedDeleted, gfsStagedRenamed, gfsStagedTypeChange,
     gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted );
