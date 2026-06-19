@@ -18,7 +18,9 @@ Type
     _authmethod: TMethod;
     _currentbranch: String;
     _incomingcommits: Integer;
+    _onblockconflict: TAEGitBlockConflictCallback;
     _onlibgit2call: TAELibGit2CallLogEvent;
+    _onmergeconflict: TAEGitMergeConflictCallback;
     _outgoingcommits: Integer;
     _repo: Pgit_repository;
     _repodir: String;
@@ -38,6 +40,8 @@ Type
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function GetDefaultRemoteName: String;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
+    Function SolveConflicts: Boolean;
   public
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
@@ -68,7 +72,9 @@ Type
     Property CurrentBranch: String Read _currentbranch Write SetCurrentBranch;
     Property IncomingCommits: Integer Read _incomingcommits;
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
+    Property OnBlockConflict: TAEGitBlockConflictCallback Read _onblockconflict Write _onblockconflict;
     Property OnLibGit2Call: TAELibGit2CallLogEvent Read _onlibgit2call Write _onlibgit2call;
+    Property OnMergeConflict: TAEGitMergeConflictCallback Read _onmergeconflict Write _onmergeconflict;
     Property OutgoingCommits: Integer Read _outgoingcommits;
     Property Settings: TAEGitRepositorySettings Read _settings;
   End;
@@ -199,6 +205,8 @@ Begin
   options.flags := 0;
 
   HandleLibGit2Output('git_stash_pop', git_stash_pop(_repo, size_t(inStashIndex), @options));
+
+  SolveConflicts;
 End;
 
 Procedure TAEGitRepository.Stash_Push(Const inStashMessage: String);
@@ -914,24 +922,14 @@ End;
 Procedure TAEGitRepository.DoRebase(Const inRebase: Pgit_rebase; Const inSignature: Pgit_signature);
 Var
   rebaseop: Pgit_rebase_operation;
-  index: Pgit_index;
   oid: git_oid;
 Begin
   Repeat
     If Not HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, inRebase), False) Then
       Break;
 
-    HandleLibGit2Output('git_repository_index', git_repository_index(@index, _repo));
-    Try
-      If git_index_has_conflicts(index) <> 0 Then
-        Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
-    Finally
-      DoLibGit2Call('git_index_has_conflicts');
-
-      git_index_free(index);
-
-      DoLibGit2Call('git_index_free');
-    End;
+    If Not SolveConflicts Then
+      Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
 
     HandleLibGit2Output('git_rebase_commit', git_rebase_commit(@oid, inRebase, nil, inSignature, nil, nil));
   Until False;
@@ -981,6 +979,106 @@ Begin
   End;
 End;
 
+Function TAEGitRepository.ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
+Var
+  ourindex, separatorindex, theirindex, a: NativeInt;
+  ours, separator, theirs, buf, ourpart, theirpart: String;
+  choice: TAEGitBlockConflictChoice;
+
+  Procedure SkipToEOL;
+  Var
+    tmp: NativeInt;
+  Begin
+    tmp := inConflictedContent.IndexOf(#10, a);
+
+    If tmp > -1 Then
+    Begin
+      a := tmp;
+
+      If a < inConflictedContent.Length - 1 Then
+        Inc(a);
+    End;
+  End;
+Begin
+  Result := False;
+
+  If Assigned(_onmergeconflict) Then
+  Begin
+    buf := inConflictedContent;
+
+    _onmergeconflict(inFileName, buf, Result);
+
+    If Result Then
+      TFile.WriteAllText(inFileName, buf);
+
+    Exit;
+  End;
+
+  If Not Assigned(_onblockconflict) Then
+    Exit;
+
+  ours := String.Create('<', GIT_MERGE_CONFLICT_MARKER_SIZE);
+  separator := String.Create('=', GIT_MERGE_CONFLICT_MARKER_SIZE);
+  theirs := String.Create('>', GIT_MERGE_CONFLICT_MARKER_SIZE);
+
+  buf := '';
+  theirindex := 0;
+
+  Repeat
+    a := theirindex;
+
+    ourindex := inConflictedContent.IndexOf(ours, theirindex);
+    separatorindex := inConflictedContent.IndexOf(separator, ourindex);
+    theirindex := inConflictedContent.IndexOf(theirs, separatorindex);
+
+    If (ourindex = -1) Or (separatorindex = -1) Or (theirindex = -1) Then
+    Begin
+      // There's no more header left. Copy the rest of the text into the buffer and leave the cycle
+
+      buf := buf + inConflictedContent.Substring(a, inConflictedContent.Length - a);
+
+      TFile.WriteAllText(inFileName, buf);
+
+      Break;
+    End;
+
+    buf := buf + inConflictedContent.Substring(a, ourindex - a);
+
+    a := ourindex;
+
+    SkipToEOL;
+
+    ourpart := inConflictedContent.Substring(a, separatorindex - a);
+
+    a := separatorindex;
+
+    SkipToEOL;
+
+    theirpart := inConflictedContent.Substring(a, theirindex - a);
+
+    a := theirindex;
+
+    SkipToEOL;
+
+    theirindex := a;
+
+    choice := ccAbort;
+
+    _onblockconflict(inFileName, ourpart, theirpart, choice);
+
+    Case choice Of
+      ccTheirs:
+        buf := buf + theirpart;
+      ccOurs:
+        buf := buf + ourpart;
+      ccAbort:
+        Exit;
+    End;
+  Until False;
+
+  Result := True;
+End;
+
 Procedure TAEGitRepository.Revert_Last_Commit(Const inCommitCount: Integer);
 Var
   target: Pgit_object;
@@ -1006,7 +1104,9 @@ Begin
   _outgoingcommits := 0;
   _settings := TAEGitRepositorySettings.Create;
 
+  _onblockconflict := nil;
   _onlibgit2call := nil;
+  _onmergeconflict := nil;
   _repo := nil;
   _repodir := '';
 End;
@@ -1638,6 +1738,62 @@ Begin
   _repodir := inRepoDir;
 
   Self.OpenGitRepository;
+End;
+
+Function TAEGitRepository.SolveConflicts: Boolean;
+Var
+  index: Pgit_index;
+  iterator: Pgit_index_conflict_iterator;
+  ancestor, ours, theirs: Pgit_index_entry;
+  mergeresult: git_merge_file_result;
+Begin
+  Result := True;
+
+  HandleLibGit2Output('git_repository_index', git_repository_index(@index, _repo));
+  Try
+    HandleLibGit2Output('git_index_read', git_index_read(index, 1));
+
+    If Not HandleLibGit2Output('git_index_has_conflicts', git_index_has_conflicts(index), False) Then
+      Exit;
+
+    HandleLibGit2Output('git_index_conflict_iterator_new', git_index_conflict_iterator_new(@iterator, index));
+    Try
+      While HandleLibGit2Output('git_index_conflict_next', git_index_conflict_next(@ancestor, @ours, @theirs, iterator), False) Do
+      Begin
+        HandleLibGit2Output('git_merge_file_from_index', git_merge_file_from_index(@mergeresult, _repo, ancestor, ours, theirs, nil));
+        Try
+          Result := mergeresult.automergeable <> 0;
+
+          If Result Then
+          Begin
+            TFile.WriteAllText(String(UTF8String(ours^.path)), String(UTF8String(mergeresult.ptr)));
+
+            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, ours^.path));
+
+            HandleLibGit2Output('git_index_write', git_index_write(index));
+          End
+          Else If ResolveConflictsManually(String(UTF8String(ours^.path)), String(UTF8String(mergeresult.ptr))) Then
+          Begin
+            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, ours^.path));
+
+            HandleLibGit2Output('git_index_write', git_index_write(index));
+          End;
+        Finally
+          git_merge_file_result_free(@mergeresult);
+
+          DoLibGit2Call('git_merge_file_result_free');
+        End;
+      End;
+    Finally
+      git_index_conflict_iterator_free(iterator);
+
+      DoLibGit2Call('git_index_conflict_iterator_free');
+    End;
+  Finally
+    git_index_free(index);
+
+    DoLibGit2Call('git_index_free');
+  End;
 End;
 
 Procedure TAEGitRepository.SplitBranchName(Var outBranchName: String; Var outRemote: String);

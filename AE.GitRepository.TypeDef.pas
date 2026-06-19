@@ -110,6 +110,12 @@ Type
 
   TAELibGit2AuthCallback = Function(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer Of Object;
 
+  TAEGitBlockConflictChoice = ( ccOurs, ccTheirs, ccAbort );
+
+  TAEGitBlockConflictCallback = Procedure(Const inFileName, inOurs, inTheirs: String; Var outChoice: TAEGitBlockConflictChoice) Of Object;
+
+  TAEGitMergeConflictCallback = Procedure(Const inFileName: String; Var outConflictedBuffer: String; Var ConflictSolved: Boolean) Of Object;
+
   TAEGitFileStatus = ( gfsCurrent, gfsStagedNew, gfsStagedModified, gfsStagedDeleted, gfsStagedRenamed, gfsStagedTypeChange,
     gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted );
 
