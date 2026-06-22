@@ -117,7 +117,7 @@ Type
   TAEGitMergeConflictCallback = Procedure(Const inFileName: String; Var outConflictedBuffer: String; Var ConflictSolved: Boolean) Of Object;
 
   TAEGitFileStatus = ( gfsCurrent, gfsStagedNew, gfsStagedModified, gfsStagedDeleted, gfsStagedRenamed, gfsStagedTypeChange,
-    gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted );
+    gfsNew, gfsModified, gfsDeleted, gfsTypeChange, gfsRenamed, gfsUnreadable, gfsIgnored, gfsConflicted, gfsCopied, gfsUntracked );
 
   TAEGitStashList = Class(TList<String>);
 
@@ -181,9 +181,12 @@ Type
     Property OrderedList: TArray<TAEGitCommit> Read GetOrderedList;
   End;
 
+  TAEGitCommitContents = Class(TDictionary<String, TPair<TAEGitFileStatus, String>>);
+
 Const
   AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'New', 'Modified', 'Deleted', 'Renamed',
-    'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted');
+    'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted',
+    'Copied', 'Untracked');
 
 Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
 Function AEGitErrorClassDescription(Const inErrorClass: TAEGitErrorClass): String;

@@ -42,6 +42,8 @@ Type
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
     Function SolveConflicts: Boolean;
+  protected
+    Property LibGit2Repository: Pgit_repository Read _repo;
   public
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
@@ -49,6 +51,7 @@ Type
     Procedure CreateBranch(Const inBranchName: String);
     Procedure DeleteBranch(Const inBranchName: String);
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
+    Procedure GetCommitContents(Const outCommitContents: TAEGitCommitContents; Const inCommitHash: String);
     Procedure GetCommitList(Const outCommitList: TAEGitCommitList; Const inStartCommitHash: String = ''; Const inCommitAmount: Integer = 0);
     Procedure Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
     Procedure Patch_Apply(Const inPatch: String);
@@ -1317,6 +1320,135 @@ Begin
     git_status_list_free(statuslist);
 
     DoLibGit2Call('git_status_list_free');
+  End;
+End;
+
+Procedure TAEGitRepository.GetCommitContents(Const outCommitContents: TAEGitCommitContents; Const inCommitHash: String);
+Var
+  oid: git_oid;
+  commit, parent: Pgit_commit;
+  tree, parenttree: Pgit_tree;
+  count: Cardinal;
+  diff: Pgit_diff;
+  filecount: size_t;
+  a: NativeUInt;
+  delta: Pgit_diff_delta;
+  patch: Pgit_patch;
+  buf: git_buf;
+  filename: String;
+  filestatus: TAEGitFileStatus;
+Begin
+  HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(inCommitHash))));
+
+  HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, _repo, @oid));
+  Try
+    HandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
+    Try
+      count := git_commit_parentcount(commit);
+
+      DoLibGit2Call('git_commit_parentcount');
+
+      If count > 0 Then
+      Begin
+        HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
+
+        HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
+      End
+      Else
+      Begin
+        commit := nil;
+        parenttree := nil;
+      End;
+
+      Try
+        HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, _repo, parenttree, tree, nil));
+        Try
+          filecount := git_diff_num_deltas(diff);
+
+          DoLibGit2Call('git_diff_num_deltas');
+
+          For a := 0 To filecount - 1 Do
+          Begin
+            delta := git_diff_get_delta(diff, a);
+
+            DoLibGit2Call('git_diff_get_delta');
+
+            HandleLibGit2Output('git_patch_from_diff', git_patch_from_diff(@patch, diff, a));
+            Try
+              HandleLibGit2Output('git_patch_to_buf', git_patch_to_buf(@buf, patch));
+              Try
+                If Length(delta.new_file.path) <> 0 Then
+                  filename := String(UTF8String(delta.new_file.path))
+                Else
+                  filename := String(UTF8String(delta.old_file.path));
+
+                Case delta.status Of
+                  GIT_DELTA_UNMODIFIED:
+                    filestatus := gfsCurrent;
+                  GIT_DELTA_ADDED:
+                    filestatus := gfsNew;
+                  GIT_DELTA_DELETED:
+                    filestatus := gfsDeleted;
+                  GIT_DELTA_MODIFIED:
+                    filestatus := gfsModified;
+                  GIT_DELTA_RENAMED:
+                    filestatus := gfsRenamed;
+                  GIT_DELTA_COPIED:
+                    filestatus := gfsCopied;
+                  GIT_DELTA_IGNORED:
+                    filestatus := gfsIgnored;
+                  GIT_DELTA_UNTRACKED:
+                    filestatus := gfsUntracked;
+                  GIT_DELTA_TYPECHANGE:
+                    filestatus := gfsTypeChange;
+                  GIT_DELTA_UNREADABLE:
+                    filestatus := gfsUnreadable;
+                  //GIT_DELTA_CONFLICTED:
+                  Else
+                    filestatus := gfsConflicted;
+                End;
+
+                outCommitContents.Add(filename, TPair<TAEGitFileStatus, String>.Create(filestatus, String(UTF8String(buf.ptr))));
+              Finally
+                git_buf_dispose(@buf);
+
+                DoLibGit2Call('git_buf_dispose');
+              End;
+            Finally
+              git_patch_free(patch);
+
+              DoLibGit2Call('git_patch_free');
+            End;
+          End;
+        Finally
+          git_diff_free(diff);
+
+          DoLibGit2Call('git_diff_free');
+        End;
+      Finally
+        If Assigned(parenttree) Then
+        Begin
+          git_tree_free(parenttree);
+
+          DoLibGit2Call('git_tree_free');
+        End;
+
+        If Assigned(parent) Then
+        Begin
+          git_commit_free(parent);
+
+          DoLibGit2Call('git_commit_free');
+        End;
+       End;
+    Finally
+      git_tree_free(tree);
+
+      DoLibGit2Call('git_tree_free');
+    End;
+  Finally
+    git_commit_free(commit);
+
+    DoLibGit2Call('git_commit_free');
   End;
 End;
 
