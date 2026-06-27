@@ -338,7 +338,6 @@ Var
   ref: PAnsiChar;
   refarray: git_strarray;
   localref, remoteref: Pgit_reference;
-  oid: Pgit_oid;
 Begin
   If inRemote.IsEmpty Then
     inRemote := Context.ContextGetDefaultRemoteName;
@@ -363,27 +362,16 @@ Begin
       Context.ContextHandleLibGit2Output('git_remote_push', git_remote_push(remote, @refarray, @options));
       Context.ContextHandleLibGit2Output('git_reference_lookup', git_reference_lookup(@localref, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/heads/' + _name))));
       Try
-        oid := git_reference_target(LocalRef);
-        Context.ContextDoLibGit2Call('git_reference_target');
-
-        If Context.ContextHandleLibGit2Output('git_reference_lookup', git_reference_lookup(@remoteref, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _name))), False) Then
-        Try
-          Context.ContextHandleLibGit2Output('git_reference_set_target', git_reference_set_target(@remoteref, remoteref, oid, nil));
-        Finally
+        If Context.ContextHandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, localref), False) Then
+        Begin
           git_reference_free(remoteref);
 
           Context.ContextDoLibGit2Call('git_reference_free');
         End
         Else
-        Try
-          Context.ContextHandleLibGit2Output('git_reference_create', git_reference_create(@remoteref, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/' + _name)), oid, 0, nil));
-        Finally
-          git_reference_free(RemoteRef);
-
-          Context.ContextDoLibGit2Call('git_reference_free');
-        End;
+          Context.ContextHandleLibGit2Output('git_branch_set_upstream', git_branch_set_upstream(localref, PAnsiChar(UTF8String(inRemote + '/' + _name))));
       Finally
-        git_reference_free(LocalRef);
+        git_reference_free(localref);
 
         Context.ContextDoLibGit2Call('git_reference_free');
       End;
