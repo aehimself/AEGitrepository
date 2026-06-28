@@ -10,7 +10,7 @@ Unit AE.GitRepository.Commit;
 
 Interface
 
-Uses AE.GitRepository.Context, AE.GitRepository.HeadTarget, AE.GitRepository.CommitFile;
+Uses AE.GitRepository.Context, AE.GitRepository.HeadTarget, AE.GitRepository.CommitFile, libgit2;
 
 Type
   TAEGitCommit = Class(TAEGitHeadTarget)
@@ -27,6 +27,8 @@ Type
     _hash: String;
     _head: Boolean;
     _message: String;
+    _original_offset: Integer;
+    _original_timestamp: git_time_t;
     _parentcommithashes: TArray<String>;
     _summary: String;
     _tags: TArray<String>;
@@ -52,6 +54,7 @@ Type
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inHash: String); ReIntroduce;
     Destructor Destroy; Override;
+    Procedure CherryPick;
     Procedure Clear;
     Function Diff: String;
     Property Author: String Read GetAuthor;
@@ -72,7 +75,98 @@ Type
 
 Implementation
 
-Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils, System.Generics.Collections;
+Uses System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils, System.Generics.Collections;
+
+Procedure TAEGitCommit.CherryPick;
+Var
+  oid, treeoid, newcommitoid: git_oid;
+  commit, parentcommit: Pgit_commit;
+  options: git_cherrypick_options;
+  index: Pgit_index;
+  tree: Pgit_tree;
+  headref: Pgit_reference;
+  parentoid: Pgit_oid;
+  author, committer: Pgit_signature;
+Begin
+  If Not _detailsloaded Then
+    Self.LoadDetails;
+
+  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+
+  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @oid));
+  Try
+    Context.ContextHandleLibGit2Output('git_cherrypick_options_init', git_cherrypick_options_init(@options, GIT_CHERRYPICK_OPTIONS_VERSION));
+
+    Context.ContextHandleLibGit2Output('git_cherrypick', git_cherrypick(Context.ContextLibGit2Repository, commit, @options));
+
+    Context.ContextHandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.ContextLibGit2Repository));
+    Try
+      If Not Context.ContextSolveConflicts Then
+        Exit;
+
+      Context.ContextHandleLibGit2Output('git_index_write_tree', git_index_write_tree(@treeoid, index));
+
+      Context.ContextHandleLibGit2Output('git_tree_lookup', git_tree_lookup(@tree, Context.ContextLibGit2Repository, @treeoid));
+      Try
+        Context.ContextHandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.ContextLibGit2Repository));
+        Try
+          parentoid := git_reference_target(headref);
+
+          Context.ContextDoLibGit2Call('git_reference_target');
+
+          Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, Context.ContextLibGit2Repository, parentoid));
+          Try
+            Context.ContextHandleLibGit2Output('git_signature_new', git_signature_new(@author, PAnsiChar(UTF8String(_author)), PAnsiChar(UTF8String(_authoremail)), _original_timestamp, _original_offset));
+            Try
+              Context.ContextHandleLibGit2Output('git_signature_now', git_signature_now(@committer, PAnsiChar(UTF8String(Context.ContextGetSettings.FullName)), PAnsiChar(UTF8String(Context.ContextGetSettings.EMailAddress))));
+              Try
+                Context.ContextHandleLibGit2Output('git_commit_create', git_commit_create(
+                  @newcommitoid,
+                  Context.ContextLibGit2Repository,
+                  'HEAD',
+                  author,
+                  committer,
+                  nil,
+                  PAnsiChar(UTF8String(_message)),
+                  tree,
+                  1,
+                  @parentcommit));
+              Finally
+                git_signature_free(committer);
+
+                Context.ContextDoLibGit2Call('git_signature_free');
+              End;
+            Finally
+              git_signature_free(author);
+
+              Context.ContextDoLibGit2Call('git_signature_free');
+            End;
+          Finally
+            git_commit_free(parentcommit);
+
+            Context.ContextDoLibGit2Call('git_commit_free');
+          End;
+        Finally
+          git_reference_free(headref);
+
+          Context.ContextDoLibGit2Call('git_reference_free');
+        End;
+      Finally
+        git_tree_free(tree);
+
+        Context.ContextDoLibGit2Call('git_tree_free');
+      End;
+    Finally
+      git_index_free(index);
+
+      Context.ContextDoLibGit2Call('git_index_free');
+    End;
+  Finally
+    git_commit_free(commit);
+
+    Context.ContextDoLibGit2Call('git_commit_free');
+  End;
+End;
 
 Procedure TAEGitCommit.Clear;
 Begin
@@ -88,6 +182,8 @@ Begin
   _detailsloaded := False;
   _head := False;
   _message := '';
+  _original_offset := 0;
+  _original_timestamp := 0;
   _parentcommithashes := [];
   _summary := '';
   _tags := [];
@@ -500,11 +596,13 @@ Begin
     If _message = _summary Then
       _message := '';
 
-    _datetime := UnixToDateTime(git_commit_time(commit), True);
+    _original_timestamp := git_commit_time(commit);
     Context.ContextDoLibGit2Call('git_commit_time');
 
-    _datetime := IncMinute(_datetime, git_commit_time_offset(commit));
+    _original_offset := git_commit_time_offset(commit);
     Context.ContextDoLibGit2Call('git_commit_time_offset');
+
+    _datetime := IncMinute(UnixToDateTime(_original_timestamp, True), _original_offset);
 
     parentcount := git_commit_parentcount(commit);
     Context.ContextDoLibGit2Call('git_commit_parentcount');
