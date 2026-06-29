@@ -111,6 +111,8 @@ Var
   idx: Integer;
   stash: TAEGitStash;
 Begin
+  _loaded := False;
+
   list := TAEGitStashList.Create;
   keysToRemove := TList<Integer>.Create;
   Try

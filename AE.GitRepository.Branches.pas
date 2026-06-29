@@ -146,6 +146,7 @@ Var
   idx: Integer;
 Begin
   Self.FreeCurrent;
+  _loaded := False;
 
   SetLength(names, 0);
   Context.ContextHandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.ContextLibGit2Repository, GIT_BRANCH_ALL));
@@ -188,7 +189,7 @@ Begin
         _items.Add(name, branch);
       End
       Else
-        branch.Commits.Refresh;
+        branch.Commits.Clear;
 
       _order.Add(name);
       keysToRemove.Remove(name);
