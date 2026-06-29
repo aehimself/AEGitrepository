@@ -279,6 +279,8 @@ Var
   wtf: TAEGitWorkTreeFile;
   key: String;
 Begin
+  _loaded := False;
+
   changedFiles := TAEGitChangedFileList.Create;
   Try
     remove := TList<String>.Create;

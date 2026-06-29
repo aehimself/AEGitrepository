@@ -507,6 +507,8 @@ Var
   sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
   i: Integer;
 Begin
+  _detailsloaded := False;
+
   Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
   Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @oid));
