@@ -98,6 +98,7 @@ Begin
   Context.ContextHandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.ContextLibGit2Repository));
   Try
     Context.ContextHandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+
     Context.ContextHandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String('refs/heads/' + _branchname))));
 
     While Context.ContextHandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
@@ -109,6 +110,7 @@ Begin
       hash := String(UTF8String(sha));
 
       _items.Add(hash, TAEGitCommit.Create(Context, hash));
+
       _order.Add(hash);
     End;
 

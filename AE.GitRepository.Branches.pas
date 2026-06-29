@@ -63,8 +63,8 @@ Destructor TAEGitBranches.Destroy;
 Begin
   Self.FreeCurrent;
 
-  _order.Free;
-  _items.Free;
+  FreeAndNil(_order);
+  FreeAndNil(_items);
 
   inherited;
 End;
@@ -138,7 +138,7 @@ Var
   names: TArray<String>;
   name: String;
   branch: TAEGitBranch;
-  keysToRemove: TList<String>;
+  keystoremove: TList<String>;
   ref: Pgit_reference;
   iterator: Pgit_branch_iterator;
   branchtypeoutput: git_branch_t;
@@ -146,9 +146,10 @@ Var
   idx: Integer;
 Begin
   Self.FreeCurrent;
-  _loaded := False;
 
+  _loaded := False;
   SetLength(names, 0);
+
   Context.ContextHandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.ContextLibGit2Repository, GIT_BRANCH_ALL));
   Try
     Repeat
@@ -160,6 +161,7 @@ Begin
         Begin
           idx := Length(names);
           SetLength(names, idx + 1);
+
           names[idx] := String(UTF8String(branchname));
         End;
       Finally
@@ -174,31 +176,33 @@ Begin
     Context.ContextDoLibGit2Call('git_branch_iterator_free');
   End;
 
-  keysToRemove := TList<String>.Create;
+  keystoremove := TList<String>.Create;
   Try
     _order.Clear;
 
     For name In _items.Keys Do
-      keysToRemove.Add(name);
+      keystoremove.Add(name);
 
     For name In names Do
     Begin
       If Not _items.TryGetValue(name, branch) Then
       Begin
         branch := TAEGitBranch.Create(Context, name);
+
         _items.Add(name, branch);
       End
       Else
         branch.Commits.Clear;
 
       _order.Add(name);
-      keysToRemove.Remove(name);
+
+      keystoremove.Remove(name);
     End;
 
-    For name In keysToRemove Do
+    For name In keystoremove Do
       _items.Remove(name);
   Finally
-    keysToRemove.Free;
+    FreeAndNil(keystoremove);
   End;
 
   _loaded := True;
@@ -233,7 +237,8 @@ Begin
 
       If _items.ContainsKey(name) Then
         _current := _items[name]
-      Else Begin
+      Else
+      Begin
         _current := TAEGitBranch.Create(Context, name);
         _currentowned := True;
       End;
