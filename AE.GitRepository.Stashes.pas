@@ -138,6 +138,8 @@ Begin
     keysToRemove.Free;
     list.Free;
   End;
+
+  _loaded := True;
 End;
 
 End.

@@ -281,84 +281,18 @@ End;
 
 Function TAEGitCommit.Diff: String;
 Var
-  buf: git_buf;
   commit: Pgit_commit;
   commitoid: git_oid;
-  diff: Pgit_diff;
-  parent: Pgit_commit;
-  parenttree: Pgit_tree;
-  tree: Pgit_tree;
-  parentcount: Cardinal;
-  sb: TStringBuilder;
 Begin
   Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@commitoid, PAnsiChar(UTF8String(_hash))));
 
   Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @commitoid));
   Try
-    Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
-    Try
-      parentcount := git_commit_parentcount(commit);
-
-      Context.ContextDoLibGit2Call('git_commit_parentcount');
-
-      parent := nil;
-      parenttree := nil;
-
-      If parentcount > 0 Then
-      Begin
-        Context.ContextHandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
-
-        Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
-      End;
-
-      Try
-        Context.ContextHandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.ContextLibGit2Repository, parenttree, tree, nil));
-        Try
-          FillChar(buf, SizeOf(buf), 0);
-
-          Context.ContextHandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
-
-          sb := TStringBuilder.Create;
-          Try
-            sb.Append(String(UTF8String(buf.ptr)));
-
-            Result := sb.ToString;
-          Finally
-            sb.Free;
-          End;
-        Finally
-          git_diff_free(diff);
-
-          Context.ContextDoLibGit2Call('git_diff_free');
-        End;
-      Finally
-        If Assigned(parenttree) Then
-        Begin
-          git_tree_free(parenttree);
-
-          Context.ContextDoLibGit2Call('git_tree_free');
-        End;
-
-        If Assigned(parent) Then
-        Begin
-          git_commit_free(parent);
-
-          Context.ContextDoLibGit2Call('git_commit_free');
-        End;
-      End;
-    Finally
-      git_tree_free(tree);
-
-      Context.ContextDoLibGit2Call('git_tree_free');
-    End;
+    Result := Self.GetPatchFromCommit(commit, []);
   Finally
     git_commit_free(commit);
 
     Context.ContextDoLibGit2Call('git_commit_free');
-
-    git_buf_dispose(@buf);
-
-    Context.ContextDoLibGit2Call('git_buf_dispose');
   End;
 End;
 

@@ -10,10 +10,10 @@ Unit AE.GitRepository.FileObject;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, AE.GitRepository.TypeDef, AE.Gitrepository.Context;
+Uses AE.GitRepository.DiffCapableObject, AE.GitRepository.TypeDef, AE.Gitrepository.Context;
 
 Type
-  TAEGitRepositoryFile = Class(TAEGitRepositoryContextedObject)
+  TAEGitRepositoryFile = Class(TAEGitRepositoryDiffCapableObject)
   strict private
     _status: TArray<TAEGitFileStatus>;
     _gitpath: String;

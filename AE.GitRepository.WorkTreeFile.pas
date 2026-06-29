@@ -34,12 +34,12 @@ Uses libgit2;
 
 Function TAEGitWorkTreeFile.GetDiff: String;
 Begin
-  Result := Context.ContextGetWorkTreePatch([Self.GitPath], False);
+  Result := Self.GetPatchFromWorkTree([Self.GitPath], False);
 End;
 
 Function TAEGitWorkTreeFile.GetStagedDiff: String;
 Begin
-  Result := Context.ContextGetWorkTreePatch([Self.GitPath], True);
+  Result := Self.GetPatchFromWorkTree([Self.GitPath], True);
 End;
 
 Function TAEGitWorkTreeFile.GetStatus: TArray<TAEGitFileStatus>;
