@@ -20,8 +20,6 @@ Type
   public
     Function ContextAuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
     Function ContextGetDefaultRemoteName: String;
-    Function ContextGetWorkTreePatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
-    Function ContextGetStashPatch(Const inFileNames: TArray<String>; Const inStashIndex: Integer): String;
     Function ContextGetSettings: TAEGitRepositorySettings;
     Function ContextGetStashCommit(Const inStashIndex: Integer): Pgit_commit;
     Function ContextHandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
@@ -50,11 +48,6 @@ End;
 Function TAEGitRepositoryContextHelper.ContextGetDefaultRemoteName: String;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).GetDefaultRemoteName;
-End;
-
-Function TAEGitRepositoryContextHelper.ContextGetWorkTreePatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
-Begin
-  Result := (Self As TAEGitRepository).WorkTree.GetPatch(inFileNames, inStagedOnly);
 End;
 
 Function TAEGitRepositoryContextHelper.ContextGetSettings: TAEGitRepositorySettings;
@@ -91,11 +84,6 @@ begin
 
     ContextDoLibGit2Call('git_reflog_free');
   End;
-End;
-
-Function TAEGitRepositoryContextHelper.ContextGetStashPatch(Const inFileNames: TArray<String>; Const inStashIndex: Integer): String;
-Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).Stashes[inStashIndex].GetPatch(inFileNames);
 End;
 
 Function TAEGitRepositoryContextHelper.ContextHandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;

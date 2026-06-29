@@ -10,12 +10,12 @@ Unit AE.GitRepository.Stash;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, AE.GitRepository.Context, System.Generics.Collections, AE.GitRepository.StashFile;
+Uses AE.GitRepository.DiffCapableObject, AE.GitRepository.Context, System.Generics.Collections, AE.GitRepository.StashFile;
 
 Type
   TAEGitStashRefreshEvent = Procedure Of Object;
 
-  TAEGitStash = Class(TAEGitRepositoryContextedObject)
+  TAEGitStash = Class(TAEGitRepositoryDiffCapableObject)
   strict private
     _index: Integer;
     _items: TObjectDictionary<String, TAEGitStashFile>;
@@ -96,74 +96,13 @@ End;
 
 Function TAEGitStash.GetPatch(Const inFileNames: TArray<String>): String;
 var
-  commit, parent: Pgit_commit;
-  tree, parenttree: Pgit_tree;
-  diff: Pgit_diff;
-  options: git_diff_options;
-  buf: git_buf;
-  utffilenames: TArray<UTF8String>;
-  filenames: TArray<PAnsiChar>;
-  a: NativeInt;
+  commit: Pgit_commit;
 begin
   Result := '';
 
   commit := Context.ContextGetStashCommit(_index);
   Try
-    FillChar(buf, SizeOf(buf), 0);
-
-    Context.ContextHandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
-
-    SetLength(utffilenames, Length(inFileNames));
-    SetLength(filenames, Length(inFileNames));
-
-    For a := Low(inFileNames) To High(inFileNames) Do
-    Begin
-      utffilenames[a] := UTF8String(inFileNames[a]);
-      filenames[a] := PAnsiChar(utffilenames[a]);
-    End;
-
-    If Length(filenames) > 0 Then
-    Begin
-      options.pathspec.count := Length(filenames);
-      options.pathspec.strings := @filenames[0];
-    End;
-
-    Context.ContextHandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
-    Try
-      Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
-      Try
-        Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
-        Try
-          Context.ContextHandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.ContextLibGit2Repository, parenttree, tree, @options));
-          Try
-            Context.ContextHandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
-            Try
-              Result := String(UTF8String(buf.ptr));
-            Finally
-              git_buf_dispose(@buf);
-
-              COntext.ContextDoLibGit2Call('git_buf_dispose');
-            End;
-          Finally
-            git_diff_free(diff);
-
-            Context.ContextDoLibGit2Call('git_diff_free');
-          End;
-        Finally
-          git_tree_free(ParentTree);
-
-          Context.ContextDoLibGit2Call('git_tree_free');
-        End;
-      Finally
-        git_tree_free(tree);
-
-        Context.ContextDoLibGit2Call('git_tree_free');
-      End;
-    Finally
-      git_commit_free(parent);
-
-      Context.ContextDoLibGit2Call('git_commit_free');
-    End;
+    Result := Self.GetPatchFromCommit(commit, inFileNames);
   Finally
     git_commit_free(commit);
 

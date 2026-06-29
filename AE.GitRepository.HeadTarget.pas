@@ -10,10 +10,10 @@ Unit AE.GitRepository.HeadTarget;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject;
+Uses AE.GitRepository.DiffCapableObject;
 
 Type
-  TAEGitHeadTarget = Class(TAEGitRepositoryContextedObject)
+  TAEGitHeadTarget = Class(TAEGitRepositoryDiffCapableObject)
   strict protected
     Procedure InternalCheckout; Virtual; Abstract;
   public

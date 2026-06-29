@@ -10,12 +10,12 @@ Unit AE.GitRepository.WorkTree;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context;
+Uses AE.GitRepository.DiffCapableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context;
 
 Type
   TAEGitChangedFileList = Class(TDictionary<String, TArray<TAEGitFileStatus>>);
 
-  TAEGitWorkTree = Class(TAEGitRepositoryContextedObject)
+  TAEGitWorkTree = Class(TAEGitRepositoryDiffCapableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
     _loaded: Boolean;
@@ -267,70 +267,8 @@ Begin
 End;
 
 Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
-Var
-  diff: Pgit_diff;
-  buf: git_buf;
-  head: Pgit_object;
-  tree: Pgit_tree;
-  options: git_diff_options;
-  utffilenames: TArray<UTF8String>;
-  filenames: TArray<PAnsiChar>;
-  a: Integer;
 Begin
-  FillChar(buf, SizeOf(buf), 0);
-
-  Context.ContextHandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
-
-  SetLength(utffilenames, Length(inFileNames));
-  SetLength(filenames, Length(inFileNames));
-
-  For a := Low(inFileNames) To High(inFileNames) Do
-  Begin
-    utffilenames[a] := UTF8String(inFileNames[a]);
-    filenames[a] := PAnsiChar(utffilenames[a]);
-  End;
-
-  If Length(filenames) > 0 Then
-  Begin
-    options.pathspec.count := Length(filenames);
-    options.pathspec.strings := @filenames[0];
-  End;
-
-  If inStagedOnly Then
-  Begin
-    Context.ContextHandleLibGit2Output('git_revparse_single', git_revparse_single(@head, Context.ContextLibGit2Repository, 'HEAD'));
-    Try
-      Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, Pgit_commit(head)));
-      Try
-        Context.ContextHandleLibGit2Output('git_diff_tree_to_index', git_diff_tree_to_index(@diff, Context.ContextLibGit2Repository, tree, nil, @options));
-      Finally
-        git_tree_free(tree);
-
-        Context.ContextDoLibGit2Call('git_tree_free');
-      End;
-    Finally
-      git_object_free(head);
-
-      Context.ContextDoLibGit2Call('git_object_free');
-    End;
-  End
-  Else
-    Context.ContextHandleLibGit2Output('git_diff_index_to_workdir', git_diff_index_to_workdir(@diff, Context.ContextLibGit2Repository, nil, @options));
-
-  Try
-    Context.ContextHandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
-    Try
-      Result := String(UTF8String(buf.ptr));
-    Finally
-      git_buf_dispose(@buf);
-
-      Context.ContextDoLibGit2Call('git_buf_dispose');
-    End;
-  Finally
-    git_diff_free(diff);
-
-    Context.ContextDoLibGit2Call('git_diff_free');
-  End;
+  Result := Self.GetPatchFromWorkTree(inFileNames, inStagedOnly);
 End;
 
 Procedure TAEGitWorkTree.Refresh;

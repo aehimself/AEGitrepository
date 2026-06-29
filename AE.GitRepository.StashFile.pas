@@ -10,42 +10,30 @@ Unit AE.GitRepository.StashFile;
 
 Interface
 
-Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Context;
+Uses AE.GitRepository.CommitBasedFile, AE.GitRepository.TypeDef, AE.GitRepository.Context, libgit2;
 
 Type
-  TAEGitStashFile = Class(TAEGitRepositoryFile)
+  TAEGitStashFile = Class(TAEGitCommitBasedFile)
   strict private
     _stashindex: Integer;
-    Function GetStatus: TAEGitFileStatus;
   strict protected
-    Function GetDiff: String; Override;
+    Function GetCommit: Pgit_commit; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
-    Property Status: TAEGitFileStatus Read GetStatus;
   End;
 
 Implementation
 
-Uses libgit2;
-
 Constructor TAEGitStashFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus);
 Begin
-  inherited Create(inContext, inGitPath);
+  inherited Create(inContext, inGitPath, inStatus);
 
   _stashindex := inStashIndex;
-
-
-  Self.InternalStatus := [inStatus];
 End;
 
-Function TAEGitStashFile.GetDiff: String;
+Function TAEGitStashFile.GetCommit: Pgit_commit;
 Begin
-  Result := Context.ContextGetStashPatch([Self.GitPath], _stashindex);
-End;
-
-Function TAEGitStashFile.GetStatus: TAEGitFileStatus;
-Begin
-  Result := Self.InternalStatus[0];
+  Result := Context.ContextGetStashCommit(_stashindex);
 End;
 
 End.
