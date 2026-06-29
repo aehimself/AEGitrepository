@@ -260,6 +260,7 @@ Var
   p: PPAnsiChar;
   a: Integer;
   hastagrefs: Boolean;
+  utf8refs: TArray<UTF8String>;
 Begin
   If inRemote.IsEmpty Then
     inRemote := Context.ContextGetDefaultRemoteName;
@@ -293,19 +294,24 @@ Begin
         End;
       End;
 
-      SetLength(refs, Integer(specs.Count) + Ord(inDownloadTags And Not hastagrefs));
+      SetLength(utf8refs, Integer(specs.Count) + Ord(inDownloadTags And Not hastagrefs));
+      SetLength(refs, Length(utf8refs));
 
       p := specs.strings;
 
       For a := 0 To specs.Count - 1 Do
       Begin
-        refs[a] := PAnsiChar(UTF8String(p^));
+        utf8refs[a] := UTF8String(p^);
+        refs[a] := PAnsiChar(utf8refs[a]);
 
         Inc(p);
       End;
 
       If inDownloadTags And Not hastagrefs Then
-        refs[High(refs)] := PAnsiChar(UTF8String('+refs/tags/*:refs/tags/*'));
+      Begin
+        utf8refs[High(utf8refs)] := UTF8String('+refs/tags/*:refs/tags/*');
+        refs[High(refs)] := PAnsiChar(utf8refs[High(utf8refs)]);
+      End;
     Finally
       git_strarray_dispose(@specs);
 
