@@ -91,10 +91,11 @@ Begin
     Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, git_reference_target(ref)));
     Try
       Context.ContextHandleLibGit2Output('git_branch_create', git_branch_create(@branchRef, Context.ContextLibGit2Repository, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
-    Finally
+
       git_reference_free(branchRef);
 
       Context.ContextDoLibGit2Call('git_reference_free');
+    Finally
       git_commit_free(commit);
 
       Context.ContextDoLibGit2Call('git_commit_free');
