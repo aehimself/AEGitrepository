@@ -37,7 +37,11 @@ Implementation
 
 Uses libgit2, System.SysUtils;
 
-Function GitLibStashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
+//
+// libgit2 callbacks
+//
+
+Function LibGit2StashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
 Begin
   If PAEGitStashList(Payload)^.Count <= Int64(Index) Then
     PAEGitStashList(Payload)^.Count := Int64(Index) + 1;
@@ -46,6 +50,10 @@ Begin
 
   Result := 0;
 End;
+
+//
+// TAEGitStashes
+//
 
 Procedure TAEGitStashes.Clear;
 Begin
@@ -107,38 +115,42 @@ End;
 Procedure TAEGitStashes.Refresh;
 Var
   list: TAEGitStashList;
-  keysToRemove: TList<Integer>;
+  keystoremove: TList<Integer>;
   idx: Integer;
   stash: TAEGitStash;
 Begin
   _loaded := False;
 
   list := TAEGitStashList.Create;
-  keysToRemove := TList<Integer>.Create;
   Try
-    Context.ContextHandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.ContextLibGit2Repository, @GitLibStashListCallback, @list));
+    keystoremove := TList<Integer>.Create;
+    Try
+      Context.ContextHandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.ContextLibGit2Repository, @LibGit2StashListCallback, @list));
 
-    For idx In _items.Keys Do
-      keysToRemove.Add(idx);
+      For idx In _items.Keys Do
+        keystoremove.Add(idx);
 
-    For idx := 0 To list.Count - 1 Do
-    Begin
-      If Not _items.TryGetValue(idx, stash) Then
+      For idx := 0 To list.Count - 1 Do
       Begin
-        stash := TAEGitStash.Create(Context, idx, list[idx], Refresh);
-        _items.Add(idx, stash);
-      End
-      Else
-        stash.Message := list[idx];
+        If Not _items.TryGetValue(idx, stash) Then
+        Begin
+          stash := TAEGitStash.Create(Context, idx, list[idx], Refresh);
 
-      keysToRemove.Remove(idx);
+          _items.Add(idx, stash);
+        End
+        Else
+          stash.Message := list[idx];
+
+        keystoremove.Remove(idx);
+      End;
+
+      For idx In keystoremove Do
+        _items.Remove(idx);
+    Finally
+      FreeAndNil(keystoremove);
     End;
-
-    For idx In keysToRemove Do
-      _items.Remove(idx);
   Finally
-    keysToRemove.Free;
-    list.Free;
+    FreeAndNil(list);
   End;
 
   _loaded := True;

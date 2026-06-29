@@ -115,6 +115,7 @@ Var
   options: git_stash_apply_options;
 Begin
   Context.ContextHandleLibGit2Output('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
+
   options.flags := 0;
 
   Context.ContextHandleLibGit2Output('git_stash_pop', git_stash_pop(Context.ContextLibGit2Repository, size_t(_index), @options));
@@ -155,6 +156,7 @@ Begin
       If count > 0 Then
       Begin
         Context.ContextHandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
+
         Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
       End;
 

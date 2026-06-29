@@ -300,6 +300,7 @@ Begin
         End;
 
         wtf.Status := pair.Value;
+
         remove.Remove(pair.Key);
       End;
 

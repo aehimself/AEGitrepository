@@ -43,7 +43,11 @@ Implementation
 
 Uses libgit2, System.SysUtils, AE.GitRepository.Exception, AE.GitRepository.TypeDef;
 
-Function GitLibAuthCallback(out_: PPgit_credential; url, username_from_url: PAnsiChar; allowed_types: Cardinal; payload: Pointer): Integer; Cdecl;
+//
+// libgit2 callbacks
+//
+
+Function LibGit2AuthCallback(out_: PPgit_credential; url, username_from_url: PAnsiChar; allowed_types: Cardinal; payload: Pointer): Integer; Cdecl;
 Var
   types: TAEGitAuthTypes;
 Begin
@@ -72,6 +76,10 @@ Begin
 
   Result := TAEGitRepositoryContext(payload).ContextAuthCallback(out_, url, username_from_url, types);
 End;
+
+//
+// TAEGitBranch
+//
 
 Constructor TAEGitBranch.Create(Const inContext: TAEGitRepositoryContext; Const inBranchName: String);
 Begin
@@ -270,7 +278,7 @@ Begin
     Context.ContextHandleLibGit2Output('git_fetch_options_init', git_fetch_options_init(@options, GIT_FETCH_OPTIONS_VERSION));
 
     options.callbacks.payload := Context;
-    options.callbacks.credentials := GitLibAuthCallback;
+    options.callbacks.credentials := LibGit2AuthCallback;
 
     If inDownloadTags Then
       options.download_tags := GIT_REMOTE_DOWNLOAD_TAGS_ALL;
@@ -349,12 +357,14 @@ Begin
     inRemote := Context.ContextGetDefaultRemoteName;
 
   Context.ContextHandleLibGit2Output('git_push_options_init', git_push_options_init(@options, GIT_PUSH_OPTIONS_VERSION));
+
   options.callbacks.payload := Context;
-  options.callbacks.credentials := GitLibAuthCallback;
+  options.callbacks.credentials := LibGit2AuthCallback;
 
   Context.ContextHandleLibGit2Output('git_remote_init_callbacks', git_remote_init_callbacks(@callbacks, GIT_REMOTE_CALLBACKS_VERSION));
+
   callbacks.payload := Context;
-  callbacks.credentials := GitLibAuthCallback;
+  callbacks.credentials := LibGit2AuthCallback;
 
   utf8ref := UTF8String(Format('+refs/heads/%s:refs/heads/%s', [_name, _name]));
   ref := PAnsiChar(utf8ref);
@@ -366,6 +376,7 @@ Begin
     Context.ContextHandleLibGit2Output('git_remote_connect', git_remote_connect(remote, GIT_DIRECTION_PUSH, @callbacks, nil, nil));
     Try
       Context.ContextHandleLibGit2Output('git_remote_push', git_remote_push(remote, @refarray, @options));
+
       Context.ContextHandleLibGit2Output('git_reference_lookup', git_reference_lookup(@localref, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/heads/' + _name))));
       Try
         If Context.ContextHandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, localref), False) Then
