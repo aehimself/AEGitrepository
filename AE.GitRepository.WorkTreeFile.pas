@@ -56,13 +56,13 @@ Begin
   utf8path := UTF8String(Self.GitPath);
   pathstring := PAnsiChar(utf8path);
 
-  Context.ContextHandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
+  Context.HandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
 
   options.checkout_strategy := GIT_CHECKOUT_FORCE Or GIT_CHECKOUT_REMOVE_UNTRACKED Or GIT_CHECKOUT_DISABLE_PATHSPEC_MATCH;
   options.paths.count := 1;
   options.paths.strings := @pathstring;
 
-  Context.ContextHandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.ContextLibGit2Repository, nil, @options));
+  Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, nil, @options));
 End;
 
 Procedure TAEGitWorkTreeFile.SetStatus(Const inStatus: TArray<TAEGitFileStatus>);
@@ -74,15 +74,15 @@ Procedure TAEGitWorkTreeFile.Stage;
 Var
   index: Pgit_index;
 Begin
-  Context.ContextHandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.ContextLibGit2Repository));
+  Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
   Try
-    Context.ContextHandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(Self.GitPath))));
+    Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(Self.GitPath))));
 
-    Context.ContextHandleLibGit2Output('git_index_write', git_index_write(index));
+    Context.HandleLibGit2Output('git_index_write', git_index_write(index));
   Finally
     git_index_free(index);
 
-    Context.ContextDoLibGit2Call('git_index_free');
+    Context.DoLibGit2Call('git_index_free');
   End;
 End;
 
@@ -93,7 +93,7 @@ Var
   target: Pgit_object;
   utf8filename: UTF8String;
 Begin
-  Context.ContextHandleLibGit2Output('git_revparse_single', git_revparse_single(@target, Context.ContextLibGit2Repository, 'HEAD'));
+  Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@target, Context.Repository, 'HEAD'));
   Try
     utf8filename := UTF8String(Self.GitPath);
     filename := PAnsiChar(utf8filename);
@@ -101,11 +101,11 @@ Begin
     pathspec.count := 1;
     pathspec.strings := @filename;
 
-    Context.ContextHandleLibGit2Output('git_reset_default', git_reset_default(Context.ContextLibGit2Repository, target, @pathspec));
+    Context.HandleLibGit2Output('git_reset_default', git_reset_default(Context.Repository, target, @pathspec));
   Finally
     git_object_free(target);
 
-    Context.ContextDoLibGit2Call('git_object_free');
+    Context.DoLibGit2Call('git_object_free');
   End;
 End;
 

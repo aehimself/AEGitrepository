@@ -18,18 +18,18 @@ Type
 
   TAEGitRepositoryContextHelper = Class Helper For TAEGitRepositoryContext
   public
-    Function ContextAuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
-    Function ContextGetDefaultRemoteName: String;
-    Function ContextGetSettings: TAEGitRepositorySettings;
-    Function ContextGetStashCommit(Const inStashIndex: Integer): Pgit_commit;
-    Function ContextHandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
-    Function ContextLibGit2Repository: Pgit_repository;
-    Function ContextSolveConflicts: Boolean;
-    Procedure ContextDoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
-    Procedure ContextUpdateCurrentBranch;
-    Procedure ContextRefreshBranches;
-    Procedure ContextRefreshWorkTree;
-    Procedure ContextSplitBranchName(Var outBranchName: String; Var outRemote: String);
+    Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
+    Function GetDefaultRemoteName: String;
+    Function GetSettings: TAEGitRepositorySettings;
+    Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
+    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function Repository: Pgit_repository;
+    Function SolveConflicts: Boolean;
+    Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
+    Procedure UpdateCurrentBranch;
+    Procedure RefreshBranches;
+    Procedure RefreshWorkTree;
+    Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
   End;
 
 Implementation
@@ -40,22 +40,22 @@ Type
   TAEGitRepositoryAccess = Class(TAEGitRepository)
   End;
 
-Function TAEGitRepositoryContextHelper.ContextAuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
+Function TAEGitRepositoryContextHelper.AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).AuthCallback(outGitCredential, inURL, inUserName, inAllowedTypes);
 End;
 
-Function TAEGitRepositoryContextHelper.ContextGetDefaultRemoteName: String;
+Function TAEGitRepositoryContextHelper.GetDefaultRemoteName: String;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).GetDefaultRemoteName;
 End;
 
-Function TAEGitRepositoryContextHelper.ContextGetSettings: TAEGitRepositorySettings;
+Function TAEGitRepositoryContextHelper.GetSettings: TAEGitRepositorySettings;
 Begin
   Result := (Self As TAEGitRepository).Settings;
 End;
 
-Function TAEGitRepositoryContextHelper.ContextGetStashCommit(Const inStashIndex: Integer): Pgit_commit;
+Function TAEGitRepositoryContextHelper.GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
 var
   reflog: Pgit_reflog;
   entry: Pgit_reflog_entry;
@@ -64,64 +64,64 @@ var
 begin
   Result := nil;
 
-  ContextHandleLibGit2Output('git_reflog_read', git_reflog_read(@reflog, ContextLibGit2Repository, 'refs/stash'));
+  HandleLibGit2Output('git_reflog_read', git_reflog_read(@reflog, Repository, 'refs/stash'));
   Try
     count := git_reflog_entrycount(reflog);
 
-    ContextDoLibGit2Call('git_reflog_entrycount');
+    DoLibGit2Call('git_reflog_entrycount');
 
     entry := git_reflog_entry_byindex(reflog, count - 1 - Cardinal(inStashIndex));
 
-    ContextDoLibGit2Call('git_reflog_entry_byindex');
+    DoLibGit2Call('git_reflog_entry_byindex');
 
     oid := git_reflog_entry_id_new(entry);
 
-    ContextDoLibGit2Call('git_reflog_entry_id_new');
+    DoLibGit2Call('git_reflog_entry_id_new');
 
-    ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, ContextLibGit2Repository, oid));
+    HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Repository, oid));
   Finally
     git_reflog_free(reflog);
 
-    ContextDoLibGit2Call('git_reflog_free');
+    DoLibGit2Call('git_reflog_free');
   End;
 End;
 
-Function TAEGitRepositoryContextHelper.ContextHandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+Function TAEGitRepositoryContextHelper.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).HandleLibGit2Output(inMethod, inCommandResult, inRaiseException);
 End;
 
-Function TAEGitRepositoryContextHelper.ContextLibGit2Repository: Pgit_repository;
+Function TAEGitRepositoryContextHelper.Repository: Pgit_repository;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).LibGit2Repository;
 End;
 
-Function TAEGitRepositoryContextHelper.ContextSolveConflicts: Boolean;
+Function TAEGitRepositoryContextHelper.SolveConflicts: Boolean;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).SolveConflicts;
 End;
 
-Procedure TAEGitRepositoryContextHelper.ContextDoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
+Procedure TAEGitRepositoryContextHelper.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
   TAEGitRepositoryAccess(Self As TAEGitRepository).DoLibGit2Call(inMethod, inErrorCode);
 End;
 
-Procedure TAEGitRepositoryContextHelper.ContextUpdateCurrentBranch;
+Procedure TAEGitRepositoryContextHelper.UpdateCurrentBranch;
 Begin
   (Self As TAEGitRepository).Branches.UpdateCurrent;
 End;
 
-Procedure TAEGitRepositoryContextHelper.ContextRefreshBranches;
+Procedure TAEGitRepositoryContextHelper.RefreshBranches;
 Begin
   (Self As TAEGitRepository).Branches.Refresh;
 End;
 
-Procedure TAEGitRepositoryContextHelper.ContextRefreshWorkTree;
+Procedure TAEGitRepositoryContextHelper.RefreshWorkTree;
 Begin
   (Self As TAEGitRepository).WorkTree.Refresh;
 End;
 
-Procedure TAEGitRepositoryContextHelper.ContextSplitBranchName(Var outBranchName: String; Var outRemote: String);
+Procedure TAEGitRepositoryContextHelper.SplitBranchName(Var outBranchName: String; Var outRemote: String);
 Begin
   TAEGitRepositoryAccess(Self As TAEGitRepository).SplitBranchName(outBranchName, outRemote);
 End;

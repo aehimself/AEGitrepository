@@ -95,17 +95,17 @@ Begin
     Exit;
   End;
 
-  Context.ContextHandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.ContextLibGit2Repository));
+  Context.HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.Repository));
   Try
-    Context.ContextHandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+    Context.HandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
 
-    Context.ContextHandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String('refs/heads/' + _branchname))));
+    Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String('refs/heads/' + _branchname))));
 
-    While Context.ContextHandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
+    While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
     Begin
       git_oid_tostr(sha, SizeOf(sha), @oid);
 
-      Context.ContextDoLibGit2Call('git_oid_tostr');
+      Context.DoLibGit2Call('git_oid_tostr');
 
       hash := String(UTF8String(sha));
 
@@ -118,7 +118,7 @@ Begin
   Finally
     git_revwalk_free(walk);
 
-    Context.ContextDoLibGit2Call('git_revwalk_free');
+    Context.DoLibGit2Call('git_revwalk_free');
   End;
 End;
 

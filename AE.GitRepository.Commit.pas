@@ -56,6 +56,7 @@ Type
     Destructor Destroy; Override;
     Procedure CherryPick;
     Procedure Clear;
+    Procedure Revert(inRevertCommitMessage: String = '');
     Function Diff: String;
     Property Author: String Read GetAuthor;
     Property AuthorEmail: String Read GetAuthorEmail;
@@ -91,38 +92,38 @@ Begin
   If Not _detailsloaded Then
     Self.LoadDetails;
 
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
-  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @oid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @oid));
   Try
-    Context.ContextHandleLibGit2Output('git_cherrypick_options_init', git_cherrypick_options_init(@options, GIT_CHERRYPICK_OPTIONS_VERSION));
+    Context.HandleLibGit2Output('git_cherrypick_options_init', git_cherrypick_options_init(@options, GIT_CHERRYPICK_OPTIONS_VERSION));
 
-    Context.ContextHandleLibGit2Output('git_cherrypick', git_cherrypick(Context.ContextLibGit2Repository, commit, @options));
+    Context.HandleLibGit2Output('git_cherrypick', git_cherrypick(Context.Repository, commit, @options));
 
-    Context.ContextHandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.ContextLibGit2Repository));
+    Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
     Try
-      If Not Context.ContextSolveConflicts Then
+      If Not Context.SolveConflicts Then
         Exit;
 
-      Context.ContextHandleLibGit2Output('git_index_write_tree', git_index_write_tree(@treeoid, index));
+      Context.HandleLibGit2Output('git_index_write_tree', git_index_write_tree(@treeoid, index));
 
-      Context.ContextHandleLibGit2Output('git_tree_lookup', git_tree_lookup(@tree, Context.ContextLibGit2Repository, @treeoid));
+      Context.HandleLibGit2Output('git_tree_lookup', git_tree_lookup(@tree, Context.Repository, @treeoid));
       Try
-        Context.ContextHandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.ContextLibGit2Repository));
+        Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository));
         Try
           parentoid := git_reference_target(headref);
 
-          Context.ContextDoLibGit2Call('git_reference_target');
+          Context.DoLibGit2Call('git_reference_target');
 
-          Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, Context.ContextLibGit2Repository, parentoid));
+          Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, Context.Repository, parentoid));
           Try
-            Context.ContextHandleLibGit2Output('git_signature_new', git_signature_new(@author, PAnsiChar(UTF8String(_author)), PAnsiChar(UTF8String(_authoremail)), _original_timestamp, _original_offset));
+            Context.HandleLibGit2Output('git_signature_new', git_signature_new(@author, PAnsiChar(UTF8String(_author)), PAnsiChar(UTF8String(_authoremail)), _original_timestamp, _original_offset));
             Try
-              Context.ContextHandleLibGit2Output('git_signature_now', git_signature_now(@committer, PAnsiChar(UTF8String(Context.ContextGetSettings.FullName)), PAnsiChar(UTF8String(Context.ContextGetSettings.EMailAddress))));
+              Context.HandleLibGit2Output('git_signature_now', git_signature_now(@committer, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
               Try
-                Context.ContextHandleLibGit2Output('git_commit_create', git_commit_create(
+                Context.HandleLibGit2Output('git_commit_create', git_commit_create(
                   @newcommitoid,
-                  Context.ContextLibGit2Repository,
+                  Context.Repository,
                   'HEAD',
                   author,
                   committer,
@@ -131,40 +132,42 @@ Begin
                   tree,
                   1,
                   @parentcommit));
+
+                Context.HandleLibGit2Output('git_repository_state_cleanup', git_repository_state_cleanup(Context.Repository));
               Finally
                 git_signature_free(committer);
 
-                Context.ContextDoLibGit2Call('git_signature_free');
+                Context.DoLibGit2Call('git_signature_free');
               End;
             Finally
               git_signature_free(author);
 
-              Context.ContextDoLibGit2Call('git_signature_free');
+              Context.DoLibGit2Call('git_signature_free');
             End;
           Finally
             git_commit_free(parentcommit);
 
-            Context.ContextDoLibGit2Call('git_commit_free');
+            Context.DoLibGit2Call('git_commit_free');
           End;
         Finally
           git_reference_free(headref);
 
-          Context.ContextDoLibGit2Call('git_reference_free');
+          Context.DoLibGit2Call('git_reference_free');
         End;
       Finally
         git_tree_free(tree);
 
-        Context.ContextDoLibGit2Call('git_tree_free');
+        Context.DoLibGit2Call('git_tree_free');
       End;
     Finally
       git_index_free(index);
 
-      Context.ContextDoLibGit2Call('git_index_free');
+      Context.DoLibGit2Call('git_index_free');
     End;
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 End;
 
@@ -226,24 +229,24 @@ Var
   oid: git_oid;
   options: git_checkout_options;
 Begin
-  Context.ContextHandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
+  Context.HandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
 
   options.checkout_strategy := GIT_CHECKOUT_SAFE;
 
-  Context.ContextHandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, Context.ContextLibGit2Repository, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, Context.Repository, PAnsiChar(UTF8String(_hash))));
   Try
-    Context.ContextHandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.ContextLibGit2Repository, obj, @options));
+    Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, obj, @options));
   Finally
     git_object_free(obj);
 
-    Context.ContextDoLibGit2Call('git_object_free');
+    Context.DoLibGit2Call('git_object_free');
   End;
 
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
-  Context.ContextHandleLibGit2Output('git_repository_set_head_detached', git_repository_set_head_detached(Context.ContextLibGit2Repository, @oid));
+  Context.HandleLibGit2Output('git_repository_set_head_detached', git_repository_set_head_detached(Context.Repository, @oid));
 
-  Context.ContextUpdateCurrentBranch;
+  Context.UpdateCurrentBranch;
 End;
 
 Function TAEGitCommit.GetFileNames: TArray<String>;
@@ -285,15 +288,15 @@ Var
   commit: Pgit_commit;
   commitoid: git_oid;
 Begin
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@commitoid, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@commitoid, PAnsiChar(UTF8String(_hash))));
 
-  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @commitoid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @commitoid));
   Try
     Result := Self.GetPatchFromCommit(commit, []);
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 End;
 
@@ -386,30 +389,30 @@ Var
 
     oid := git_reference_target(inRef);
 
-    Context.ContextDoLibGit2Call('git_reference_target');
+    Context.DoLibGit2Call('git_reference_target');
 
     If Assigned(oid) Then
     Begin
       git_oid_tostr(sha, SizeOf(sha), oid);
 
-      Context.ContextDoLibGit2Call('git_oid_tostr');
+      Context.DoLibGit2Call('git_oid_tostr');
 
       outHash := String(UTF8String(sha));
 
       Exit(True);
     End;
 
-    If Context.ContextHandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), False) Then
+    If Context.HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), False) Then
     Try
       oid := git_object_id(obj);
 
-      Context.ContextDoLibGit2Call('git_object_id');
+      Context.DoLibGit2Call('git_object_id');
 
       If Assigned(oid) Then
       Begin
         git_oid_tostr(sha, SizeOf(sha), oid);
 
-        Context.ContextDoLibGit2Call('git_oid_tostr');
+        Context.DoLibGit2Call('git_oid_tostr');
 
         outHash := String(UTF8String(sha));
 
@@ -418,7 +421,7 @@ Var
     Finally
       git_object_free(obj);
 
-      Context.ContextDoLibGit2Call('git_object_free');
+      Context.DoLibGit2Call('git_object_free');
     End;
   End;
 Begin
@@ -426,16 +429,16 @@ Begin
   _branches := [];
   _head := False;
 
-  Context.ContextHandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/tags/*'))));
+  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/tags/*'))));
   Try
-    While Context.ContextHandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
     Begin
       Try
         If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
         Begin
           shortname := git_reference_shorthand(ref);
 
-          Context.ContextDoLibGit2Call('git_reference_shorthand');
+          Context.DoLibGit2Call('git_reference_shorthand');
 
           name := String(UTF8String(shortname));
 
@@ -444,25 +447,25 @@ Begin
       Finally
         git_reference_free(ref);
 
-        Context.ContextDoLibGit2Call('git_reference_free');
+        Context.DoLibGit2Call('git_reference_free');
       End;
     End;
   Finally
     git_reference_iterator_free(iterator);
 
-    Context.ContextDoLibGit2Call('git_reference_iterator_free');
+    Context.DoLibGit2Call('git_reference_iterator_free');
   End;
 
-  Context.ContextHandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/heads/*'))));
+  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/heads/*'))));
   Try
-    While Context.ContextHandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
     Begin
       Try
         If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
         Begin
           shortname := git_reference_shorthand(ref);
 
-          Context.ContextDoLibGit2Call('git_reference_shorthand');
+          Context.DoLibGit2Call('git_reference_shorthand');
 
           name := String(UTF8String(shortname));
 
@@ -471,25 +474,25 @@ Begin
       Finally
         git_reference_free(ref);
 
-        Context.ContextDoLibGit2Call('git_reference_free');
+        Context.DoLibGit2Call('git_reference_free');
       End;
     End;
   Finally
     git_reference_iterator_free(iterator);
 
-    Context.ContextDoLibGit2Call('git_reference_iterator_free');
+    Context.DoLibGit2Call('git_reference_iterator_free');
   End;
 
-  Context.ContextHandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.ContextLibGit2Repository, PAnsiChar(UTF8String('refs/remotes/*'))));
+  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/remotes/*'))));
   Try
-    While Context.ContextHandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
     Begin
       Try
         If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
         Begin
           shortname := git_reference_shorthand(ref);
 
-          Context.ContextDoLibGit2Call('git_reference_shorthand');
+          Context.DoLibGit2Call('git_reference_shorthand');
 
           name := String(UTF8String(shortname));
 
@@ -498,23 +501,23 @@ Begin
       Finally
         git_reference_free(ref);
 
-        Context.ContextDoLibGit2Call('git_reference_free');
+        Context.DoLibGit2Call('git_reference_free');
       End;
     End;
   Finally
     git_reference_iterator_free(iterator);
 
-    Context.ContextDoLibGit2Call('git_reference_iterator_free');
+    Context.DoLibGit2Call('git_reference_iterator_free');
   End;
 
-  If Context.ContextHandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.ContextLibGit2Repository), False) Then
+  If Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository), False) Then
   Try
     If TryGetCommitHashFromReference(headref, hash) Then
       _head := hash = _hash;
   Finally
     git_reference_free(headref);
 
-    Context.ContextDoLibGit2Call('git_reference_free');
+    Context.DoLibGit2Call('git_reference_free');
   End;
 End;
 
@@ -530,48 +533,48 @@ Var
 Begin
   _detailsloaded := False;
 
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
-  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @oid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @oid));
   Try
     signature := git_commit_author(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_author');
+    Context.DoLibGit2Call('git_commit_author');
 
     _author := String(UTF8String(signature^.name_));
     _authoremail := String(UTF8String(signature^.email));
 
     signature := git_commit_committer(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_committer');
+    Context.DoLibGit2Call('git_commit_committer');
 
     _committer := String(UTF8String(signature^.name_));
     _committeremail := String(UTF8String(signature^.email));
 
     _summary := String(UTF8String(git_commit_summary(commit)));
 
-    Context.ContextDoLibGit2Call('git_commit_summary');
+    Context.DoLibGit2Call('git_commit_summary');
 
     _message := String(UTF8String(git_commit_message(commit)));
 
-    Context.ContextDoLibGit2Call('git_commit_message');
+    Context.DoLibGit2Call('git_commit_message');
 
     If _message = _summary Then
       _message := '';
 
     _original_timestamp := git_commit_time(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_time');
+    Context.DoLibGit2Call('git_commit_time');
 
     _original_offset := git_commit_time_offset(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_time_offset');
+    Context.DoLibGit2Call('git_commit_time_offset');
 
     _datetime := IncMinute(UnixToDateTime(_original_timestamp, True), _original_offset);
 
     parentcount := git_commit_parentcount(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_parentcount');
+    Context.DoLibGit2Call('git_commit_parentcount');
 
     SetLength(_parentcommithashes, parentcount);
 
@@ -579,18 +582,18 @@ Begin
     Begin
       parentoid := git_commit_parent_id(commit, i);
 
-      Context.ContextDoLibGit2Call('git_commit_parent_id');
+      Context.DoLibGit2Call('git_commit_parent_id');
 
       git_oid_tostr(sha, SizeOf(sha), parentoid);
 
-      Context.ContextDoLibGit2Call('git_oid_tostr');
+      Context.DoLibGit2Call('git_oid_tostr');
 
       _parentcommithashes[i] := String(UTF8String(sha));
     End;
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 
   LoadDecorations;
@@ -614,38 +617,38 @@ Begin
   _changedfiles.Clear;
   _changedfilesloaded := False;
 
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
-  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, @oid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @oid));
   Try
-    Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
+    Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
     Try
       count := git_commit_parentcount(commit);
 
-      Context.ContextDoLibGit2Call('git_commit_parentcount');
+      Context.DoLibGit2Call('git_commit_parentcount');
 
       parent := nil;
       parenttree := nil;
 
       If count > 0 Then
       Begin
-        Context.ContextHandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
+        Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
 
-        Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
+        Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
       End;
 
       Try
-        Context.ContextHandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.ContextLibGit2Repository, parenttree, tree, nil));
+        Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree, tree, nil));
         Try
           filecount := git_diff_num_deltas(diff);
 
-          Context.ContextDoLibGit2Call('git_diff_num_deltas');
+          Context.DoLibGit2Call('git_diff_num_deltas');
 
           For a := 0 To filecount - 1 Do
           Begin
             delta := git_diff_get_delta(diff, a);
 
-            Context.ContextDoLibGit2Call('git_diff_get_delta');
+            Context.DoLibGit2Call('git_diff_get_delta');
 
             If Length(delta.new_file.path) <> 0 Then
               filename := String(UTF8String(delta.new_file.path))
@@ -682,35 +685,122 @@ Begin
         Finally
           git_diff_free(diff);
 
-          Context.ContextDoLibGit2Call('git_diff_free');
+          Context.DoLibGit2Call('git_diff_free');
         End;
       Finally
         If Assigned(parenttree) Then
         Begin
           git_tree_free(parenttree);
 
-          Context.ContextDoLibGit2Call('git_tree_free');
+          Context.DoLibGit2Call('git_tree_free');
         End;
 
         If Assigned(parent) Then
         Begin
           git_commit_free(parent);
 
-          Context.ContextDoLibGit2Call('git_commit_free');
+          Context.DoLibGit2Call('git_commit_free');
         End;
       End;
     Finally
       git_tree_free(tree);
 
-      Context.ContextDoLibGit2Call('git_tree_free');
+      Context.DoLibGit2Call('git_tree_free');
     End;
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 
   _changedfilesloaded := True;
+End;
+
+Procedure TAEGitCommit.Revert(inRevertCommitMessage: String = '');
+var
+  revertoptions: git_revert_options;
+  commit, headcommit: Pgit_commit;
+  index: Pgit_index;
+  tree: Pgit_tree;
+  oid, treeoid, commitoid: git_oid;
+  headref: Pgit_reference;
+  signature: Pgit_signature;
+  parents: Array[0..0] Of Pgit_commit;
+  tmpoid: Pgit_oid;
+Begin
+  If inRevertCommitMessage.IsEmpty Then
+    inRevertCommitMessage := 'Revert "' + _summary + '"';
+
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
+
+  Context.HandleLibGit2Output('git_revert_options_init', git_revert_options_init(@revertoptions, GIT_REVERT_OPTIONS_VERSION));
+
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @oid));
+  Try
+    Context.HandleLibGit2Output('git_revert', git_revert(Context.Repository, commit, @revertoptions));
+
+    If Not Context.SolveConflicts Then
+      Exit;
+
+    Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
+    Try
+      Context.HandleLibGit2Output('git_index_write_tree', git_index_write_tree(@treeOid, index));
+
+      Context.HandleLibGit2Output('git_tree_lookup', git_tree_lookup(@tree, Context.Repository, @treeoid));
+      Try
+        Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository));
+        Try
+          tmpoid := git_reference_target(headref);
+
+          Context.DoLibGit2Call('git_reference_target');
+
+          Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@headcommit, Context.Repository, tmpoid));
+          Try
+            Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
+            Try
+              parents[0] := headcommit;
+
+              Context.HandleLibGit2Output('git_commit_create', git_commit_create(
+                @commitoid,
+                Context.Repository,
+                'HEAD',
+                signature,
+                signature,
+                nil,
+                PAnsiChar(UTF8String(inRevertCommitMessage)),
+                tree,
+                1,
+                @parents));
+
+              Context.HandleLibGit2Output('git_repository_state_cleanup', git_repository_state_cleanup(Context.Repository));
+            Finally
+              git_signature_free(Signature);
+
+              Context.DoLibGit2Call('git_signature_free');
+            End;
+          Finally
+            git_commit_free(HeadCommit);
+
+            Context.DoLibGit2Call('git_commit_free');
+          End;
+        Finally
+          git_reference_free(HeadRef);
+
+          Context.DoLibGit2Call('git_reference_free');
+        End;
+      Finally
+        git_tree_free(Tree);
+
+        Context.DoLibGit2Call('git_tree_free');
+      End;
+    Finally
+      git_index_free(Index);
+
+      Context.DoLibGit2Call('git_index_free');
+    End;
+  Finally
+    git_commit_free(Commit);
+  End;
 End;
 
 End.

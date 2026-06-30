@@ -49,7 +49,7 @@ Begin
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 End;
 

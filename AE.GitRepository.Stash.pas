@@ -70,7 +70,7 @@ End;
 
 Procedure TAEGitStash.Drop;
 Begin
-  Context.ContextHandleLibGit2Output('git_stash_drop', git_stash_drop(Context.ContextLibGit2Repository, size_t(_index)));
+  Context.HandleLibGit2Output('git_stash_drop', git_stash_drop(Context.Repository, size_t(_index)));
 
   If Assigned(_onrefresh) Then
     _onrefresh;
@@ -100,13 +100,13 @@ var
 begin
   Result := '';
 
-  commit := Context.ContextGetStashCommit(_index);
+  commit := Context.GetStashCommit(_index);
   Try
     Result := Self.GetPatchFromCommit(commit, inFileNames);
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 End;
 
@@ -114,15 +114,15 @@ Procedure TAEGitStash.Pop;
 Var
   options: git_stash_apply_options;
 Begin
-  Context.ContextHandleLibGit2Output('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
+  Context.HandleLibGit2Output('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
 
   options.flags := 0;
 
-  Context.ContextHandleLibGit2Output('git_stash_pop', git_stash_pop(Context.ContextLibGit2Repository, size_t(_index), @options));
+  Context.HandleLibGit2Output('git_stash_pop', git_stash_pop(Context.Repository, size_t(_index), @options));
 
-  Context.ContextSolveConflicts;
+  Context.SolveConflicts;
 
-  Context.ContextRefreshWorkTree;
+  Context.RefreshWorkTree;
 
   If Assigned(_onrefresh) Then
     _onrefresh;
@@ -142,36 +142,36 @@ Var
 Begin
   Self.Clear;
 
-  commit := Context.ContextGetStashCommit(_index);
+  commit := Context.GetStashCommit(_index);
   Try
-    Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
+    Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
     Try
       count := git_commit_parentcount(commit);
 
-      Context.ContextDoLibGit2Call('git_commit_parentcount');
+      Context.DoLibGit2Call('git_commit_parentcount');
 
       parent := nil;
       parenttree := nil;
 
       If count > 0 Then
       Begin
-        Context.ContextHandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
+        Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
 
-        Context.ContextHandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
+        Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
       End;
 
       Try
-        Context.ContextHandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.ContextLibGit2Repository, parenttree, tree, nil));
+        Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree, tree, nil));
         Try
           filecount := git_diff_num_deltas(diff);
 
-          Context.ContextDoLibGit2Call('git_diff_num_deltas');
+          Context.DoLibGit2Call('git_diff_num_deltas');
 
           For a := 0 To filecount - 1 Do
           Begin
             delta := git_diff_get_delta(diff, a);
 
-            Context.ContextDoLibGit2Call('git_diff_get_delta');
+            Context.DoLibGit2Call('git_diff_get_delta');
 
             If Length(delta.new_file.path) <> 0 Then
               filename := String(UTF8String(delta.new_file.path))
@@ -208,32 +208,32 @@ Begin
         Finally
           git_diff_free(diff);
 
-          Context.ContextDoLibGit2Call('git_diff_free');
+          Context.DoLibGit2Call('git_diff_free');
         End;
       Finally
         If Assigned(parenttree) Then
         Begin
           git_tree_free(parenttree);
 
-          Context.ContextDoLibGit2Call('git_tree_free');
+          Context.DoLibGit2Call('git_tree_free');
         End;
 
         If Assigned(parent) Then
         Begin
           git_commit_free(parent);
 
-          Context.ContextDoLibGit2Call('git_commit_free');
+          Context.DoLibGit2Call('git_commit_free');
         End;
       End;
     Finally
       git_tree_free(tree);
 
-      Context.ContextDoLibGit2Call('git_tree_free');
+      Context.DoLibGit2Call('git_tree_free');
     End;
   Finally
     git_commit_free(commit);
 
-    Context.ContextDoLibGit2Call('git_commit_free');
+    Context.DoLibGit2Call('git_commit_free');
   End;
 
   _loaded := True;

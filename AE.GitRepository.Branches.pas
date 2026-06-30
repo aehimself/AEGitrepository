@@ -28,7 +28,7 @@ Type
     Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
     Destructor Destroy; Override;
     Procedure Clear;
-    Procedure CreateBranch(Const inBranchName: String);
+    Procedure New(Const inBranchName: String);
     Procedure Refresh;
     Procedure UpdateCurrent;
     Property Current: TAEGitHeadTarget Read GetCurrent;
@@ -81,29 +81,29 @@ Begin
     _current := nil;
 End;
 
-Procedure TAEGitBranches.CreateBranch(Const inBranchName: String);
+Procedure TAEGitBranches.New(Const inBranchName: String);
 Var
   ref, branchRef: Pgit_reference;
   commit: Pgit_commit;
 Begin
-  Context.ContextHandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.ContextLibGit2Repository));
+  Context.HandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.Repository));
   Try
-    Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.ContextLibGit2Repository, git_reference_target(ref)));
+    Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, git_reference_target(ref)));
     Try
-      Context.ContextHandleLibGit2Output('git_branch_create', git_branch_create(@branchRef, Context.ContextLibGit2Repository, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
+      Context.HandleLibGit2Output('git_branch_create', git_branch_create(@branchRef, Context.Repository, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
 
       git_reference_free(branchRef);
 
-      Context.ContextDoLibGit2Call('git_reference_free');
+      Context.DoLibGit2Call('git_reference_free');
     Finally
       git_commit_free(commit);
 
-      Context.ContextDoLibGit2Call('git_commit_free');
+      Context.DoLibGit2Call('git_commit_free');
     End;
   Finally
     git_reference_free(ref);
 
-    Context.ContextDoLibGit2Call('git_reference_free');
+    Context.DoLibGit2Call('git_reference_free');
   End;
 
   Refresh;
@@ -150,14 +150,14 @@ Begin
   _loaded := False;
   SetLength(names, 0);
 
-  Context.ContextHandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.ContextLibGit2Repository, GIT_BRANCH_ALL));
+  Context.HandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.Repository, GIT_BRANCH_ALL));
   Try
     Repeat
-      If Not Context.ContextHandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
+      If Not Context.HandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
         Break;
 
       Try
-        If Context.ContextHandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
+        If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
         Begin
           idx := Length(names);
           SetLength(names, idx + 1);
@@ -167,13 +167,13 @@ Begin
       Finally
         git_reference_free(ref);
 
-        Context.ContextDoLibGit2Call('git_reference_free');
+        Context.DoLibGit2Call('git_reference_free');
       End;
     Until False;
   Finally
     git_branch_iterator_free(iterator);
 
-    Context.ContextDoLibGit2Call('git_branch_iterator_free');
+    Context.DoLibGit2Call('git_branch_iterator_free');
   End;
 
   keystoremove := TList<String>.Create;
@@ -222,15 +222,15 @@ Var
 Begin
   Self.FreeCurrent;
 
-  If Context.ContextHandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.ContextLibGit2Repository), False) Then
+  If Context.HandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.Repository), False) Then
   Try
     isBranch := git_reference_is_branch(ref);
 
-    Context.ContextDoLibGit2Call('git_reference_is_branch');
+    Context.DoLibGit2Call('git_reference_is_branch');
 
     If isBranch <> 0 Then
     Begin
-      If Context.ContextHandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
+      If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
         name := String(UTF8String(branchname))
       Else
         name := '';
@@ -247,11 +247,11 @@ Begin
     Begin
       oid := git_reference_target(ref)^;
 
-      Context.ContextDoLibGit2Call('git_reference_target');
+      Context.DoLibGit2Call('git_reference_target');
 
       git_oid_tostr(sha, SizeOf(sha), @oid);
 
-      Context.ContextDoLibGit2Call('git_oid_tostr');
+      Context.DoLibGit2Call('git_oid_tostr');
 
       commitHash := String(UTF8String(sha));
       _current := TAEGitCommit.Create(Context, commitHash);
@@ -260,7 +260,7 @@ Begin
   Finally
     git_reference_free(ref);
 
-    Context.ContextDoLibGit2Call('git_reference_free');
+    Context.DoLibGit2Call('git_reference_free');
   End;
 End;
 

@@ -39,9 +39,9 @@ Function TAEGitCommitFile.GetCommit: Pgit_commit;
 Var
   oid: git_oid;
 Begin
-  Context.ContextHandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_commithash))));
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_commithash))));
 
-  Context.ContextHandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Context.ContextLibGit2Repository, @oid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Context.Repository, @oid));
 End;
 
 End.
