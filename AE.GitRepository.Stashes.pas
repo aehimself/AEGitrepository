@@ -97,16 +97,16 @@ Var
   signature: Pgit_signature;
   oid: git_oid;
 Begin
-  Context.ContextHandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.ContextGetSettings.FullName)), PAnsiChar(UTF8String(Context.ContextGetSettings.EMailAddress))));
+  Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
   Try
-    Context.ContextHandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.ContextLibGit2Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+    Context.HandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
   Finally
     git_signature_free(signature);
 
-    Context.ContextDoLibGit2Call('git_signature_free');
+    Context.DoLibGit2Call('git_signature_free');
   End;
 
-  Context.ContextRefreshWorkTree;
+  Context.RefreshWorkTree;
 
   If _loaded Then
     Self.Refresh;
@@ -125,7 +125,7 @@ Begin
   Try
     keystoremove := TList<Integer>.Create;
     Try
-      Context.ContextHandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.ContextLibGit2Repository, @LibGit2StashListCallback, @list));
+      Context.HandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.Repository, @LibGit2StashListCallback, @list));
 
       For idx In _items.Keys Do
         keystoremove.Add(idx);

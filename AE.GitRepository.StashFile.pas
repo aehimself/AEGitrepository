@@ -33,7 +33,7 @@ End;
 
 Function TAEGitStashFile.GetCommit: Pgit_commit;
 Begin
-  Result := Context.ContextGetStashCommit(_stashindex);
+  Result := Context.GetStashCommit(_stashindex);
 End;
 
 End.
