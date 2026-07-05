@@ -55,8 +55,6 @@ Begin
   _items := TObjectDictionary<String, TAEGitBranch>.Create([doOwnsValues]);
   _order := TList<String>.Create;
   _currentowned := False;
-
-  Self.UpdateCurrent;
 End;
 
 Destructor TAEGitBranches.Destroy;
@@ -234,6 +232,9 @@ Begin
         name := String(UTF8String(branchname))
       Else
         name := '';
+
+      If Not _loaded Then
+        Self.Refresh;
 
       If _items.ContainsKey(name) Then
         _current := _items[name]

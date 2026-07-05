@@ -644,44 +644,45 @@ Begin
 
           Context.DoLibGit2Call('git_diff_num_deltas');
 
-          For a := 0 To filecount - 1 Do
-          Begin
-            delta := git_diff_get_delta(diff, a);
+          If filecount > 0 Then
+            For a := 0 To filecount - 1 Do
+            Begin
+              delta := git_diff_get_delta(diff, a);
 
-            Context.DoLibGit2Call('git_diff_get_delta');
+              Context.DoLibGit2Call('git_diff_get_delta');
 
-            If Length(delta.new_file.path) <> 0 Then
-              filename := String(UTF8String(delta.new_file.path))
-            Else
-              filename := String(UTF8String(delta.old_file.path));
-
-            Case delta.status Of
-              GIT_DELTA_UNMODIFIED:
-                filestatus := gfsCurrent;
-              GIT_DELTA_ADDED:
-                filestatus := gfsNew;
-              GIT_DELTA_DELETED:
-                filestatus := gfsDeleted;
-              GIT_DELTA_MODIFIED:
-                filestatus := gfsModified;
-              GIT_DELTA_RENAMED:
-                filestatus := gfsRenamed;
-              GIT_DELTA_COPIED:
-                filestatus := gfsCopied;
-              GIT_DELTA_IGNORED:
-                filestatus := gfsIgnored;
-              GIT_DELTA_UNTRACKED:
-                filestatus := gfsUntracked;
-              GIT_DELTA_TYPECHANGE:
-                filestatus := gfsTypeChange;
-              GIT_DELTA_UNREADABLE:
-                filestatus := gfsUnreadable;
+              If Length(delta.new_file.path) <> 0 Then
+                filename := String(UTF8String(delta.new_file.path))
               Else
-                filestatus := gfsConflicted;
-            End;
+                filename := String(UTF8String(delta.old_file.path));
 
-            _changedfiles.Add(filename, TAEGitCommitFile.Create(Context, _hash, filename, filestatus));
-          End;
+              Case delta.status Of
+                GIT_DELTA_UNMODIFIED:
+                  filestatus := gfsCurrent;
+                GIT_DELTA_ADDED:
+                  filestatus := gfsNew;
+                GIT_DELTA_DELETED:
+                  filestatus := gfsDeleted;
+                GIT_DELTA_MODIFIED:
+                  filestatus := gfsModified;
+                GIT_DELTA_RENAMED:
+                  filestatus := gfsRenamed;
+                GIT_DELTA_COPIED:
+                  filestatus := gfsCopied;
+                GIT_DELTA_IGNORED:
+                  filestatus := gfsIgnored;
+                GIT_DELTA_UNTRACKED:
+                  filestatus := gfsUntracked;
+                GIT_DELTA_TYPECHANGE:
+                  filestatus := gfsTypeChange;
+                GIT_DELTA_UNREADABLE:
+                  filestatus := gfsUnreadable;
+                Else
+                  filestatus := gfsConflicted;
+              End;
+
+              _changedfiles.Add(filename, TAEGitCommitFile.Create(Context, _hash, filename, filestatus));
+            End;
         Finally
           git_diff_free(diff);
 
