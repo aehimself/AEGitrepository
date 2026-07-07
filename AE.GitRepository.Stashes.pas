@@ -127,8 +127,7 @@ Begin
     Try
       Context.HandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.Repository, @LibGit2StashListCallback, @list));
 
-      For idx In _items.Keys Do
-        keystoremove.Add(idx);
+      keystoremove.AddRange(_items.Keys.ToArray);
 
       For idx := 0 To list.Count - 1 Do
       Begin

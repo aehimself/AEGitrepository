@@ -178,8 +178,7 @@ Begin
   Try
     _order.Clear;
 
-    For name In _items.Keys Do
-      keystoremove.Add(name);
+    keystoremove.AddRange(_items.Keys.ToArray);
 
     For name In names Do
     Begin
