@@ -380,7 +380,6 @@ Var
   name, hash: String;
   oid: Pgit_oid;
   obj: Pgit_object;
-  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
 
   Function TryGetCommitHashFromReference(Const inRef: Pgit_reference; out outHash: String): Boolean;
   Begin
@@ -393,11 +392,7 @@ Var
 
     If Assigned(oid) Then
     Begin
-      git_oid_tostr(sha, SizeOf(sha), oid);
-
-      Context.DoLibGit2Call('git_oid_tostr');
-
-      outHash := String(UTF8String(sha));
+      outHash := Context.OidToString(oid);
 
       Exit(True);
     End;
@@ -410,11 +405,7 @@ Var
 
       If Assigned(oid) Then
       Begin
-        git_oid_tostr(sha, SizeOf(sha), oid);
-
-        Context.DoLibGit2Call('git_oid_tostr');
-
-        outHash := String(UTF8String(sha));
+        outHash := Context.OidToString(oid);
 
         Result := True;
       End;
@@ -528,7 +519,6 @@ Var
   signature: Pgit_signature;
   parentcount: Cardinal;
   parentoid: Pgit_oid;
-  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
   i: Integer;
 Begin
   _detailsloaded := False;
@@ -584,11 +574,7 @@ Begin
 
       Context.DoLibGit2Call('git_commit_parent_id');
 
-      git_oid_tostr(sha, SizeOf(sha), parentoid);
-
-      Context.DoLibGit2Call('git_oid_tostr');
-
-      _parentcommithashes[i] := String(UTF8String(sha));
+      _parentcommithashes[i] := Context.OidToString(parentoid);
     End;
   Finally
     git_commit_free(commit);

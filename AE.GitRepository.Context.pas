@@ -20,6 +20,7 @@ Type
   public
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
     Function GetDefaultRemoteName: String;
+    Function OidToString(Const inOid: Pgit_oid): String;
     Function GetSettings: TAEGitRepositorySettings;
     Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
@@ -48,6 +49,17 @@ End;
 Function TAEGitRepositoryContextHelper.GetDefaultRemoteName: String;
 Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).GetDefaultRemoteName;
+End;
+
+Function TAEGitRepositoryContextHelper.OidToString(Const inOid: Pgit_oid): String;
+Var
+  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
+Begin
+  git_oid_tostr(sha, SizeOf(sha), inOid);
+
+  DoLibGit2Call('git_oid_tostr');
+
+  Result := String(UTF8String(sha));
 End;
 
 Function TAEGitRepositoryContextHelper.GetSettings: TAEGitRepositorySettings;
