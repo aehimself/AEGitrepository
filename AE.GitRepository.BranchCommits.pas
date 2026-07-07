@@ -80,7 +80,6 @@ Procedure TAEGitBranchCommits.Refresh;
 Var
   walk: Pgit_revwalk;
   oid: git_oid;
-  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
   hash: String;
 Begin
   _loaded := False;
@@ -103,11 +102,7 @@ Begin
 
     While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
     Begin
-      git_oid_tostr(sha, SizeOf(sha), @oid);
-
-      Context.DoLibGit2Call('git_oid_tostr');
-
-      hash := String(UTF8String(sha));
+      hash := Context.OidToString(@oid);
 
       _items.Add(hash, TAEGitCommit.Create(Context, hash));
 

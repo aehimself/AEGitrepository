@@ -213,8 +213,6 @@ Var
   oid: git_oid;
   ref: Pgit_reference;
   name: String;
-  commitHash: String;
-  sha: Array[0..GIT_OID_SHA1_HEXSIZE + 1] Of AnsiChar;
   branchname: PAnsiChar;
 Begin
   Self.FreeCurrent;
@@ -249,12 +247,7 @@ Begin
 
       Context.DoLibGit2Call('git_reference_target');
 
-      git_oid_tostr(sha, SizeOf(sha), @oid);
-
-      Context.DoLibGit2Call('git_oid_tostr');
-
-      commitHash := String(UTF8String(sha));
-      _current := TAEGitCommit.Create(Context, commitHash);
+      _current := TAEGitCommit.Create(Context, Context.OidToString(@oid));
       _currentowned := True;
     End;
   Finally
