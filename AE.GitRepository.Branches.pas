@@ -178,7 +178,7 @@ Begin
   Try
     _order.Clear;
 
-    keystoremove.AddRange(_items.Keys.ToArray);
+    keystoremove.AddRange(_items.Keys);
 
     For name In names Do
     Begin
@@ -189,7 +189,10 @@ Begin
         _items.Add(name, branch);
       End
       Else
+      Begin
         branch.Commits.Clear;
+        branch.Submodules.Clear;
+      End;
 
       _order.Add(name);
 

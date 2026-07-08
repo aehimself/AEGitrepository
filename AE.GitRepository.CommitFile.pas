@@ -17,7 +17,7 @@ Type
   strict private
     _commithash: String;
   strict protected
-    Function GetCommit: Pgit_commit; Override;
+    Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inCommitHash, inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
   End;
@@ -35,13 +35,13 @@ Begin
   _commithash := inCommitHash;
 End;
 
-Function TAEGitCommitFile.GetCommit: Pgit_commit;
+Function TAEGitCommitFile.GetCommit(Const inRepository: Pgit_repository): Pgit_commit;
 Var
   oid: git_oid;
 Begin
   Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_commithash))));
 
-  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Context.Repository, @oid));
+  Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, inRepository, @oid));
 End;
 
 End.

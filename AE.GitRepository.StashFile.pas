@@ -17,7 +17,7 @@ Type
   strict private
     _stashindex: Integer;
   strict protected
-    Function GetCommit: Pgit_commit; Override;
+    Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
   End;
@@ -31,7 +31,7 @@ Begin
   _stashindex := inStashIndex;
 End;
 
-Function TAEGitStashFile.GetCommit: Pgit_commit;
+Function TAEGitStashFile.GetCommit(Const inRepository: Pgit_repository): Pgit_commit;
 Begin
   Result := Context.GetStashCommit(_stashindex);
 End;

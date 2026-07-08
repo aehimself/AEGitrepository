@@ -292,7 +292,7 @@ Begin
 
   Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @commitoid));
   Try
-    Result := Self.GetPatchFromCommit(commit, []);
+    Result := Self.GetPatchFromCommit(commit, [], Context.Repository);
   Finally
     git_commit_free(commit);
 

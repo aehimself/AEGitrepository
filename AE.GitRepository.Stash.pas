@@ -102,7 +102,7 @@ begin
 
   commit := Context.GetStashCommit(_index);
   Try
-    Result := Self.GetPatchFromCommit(commit, inFileNames);
+    Result := Self.GetPatchFromCommit(commit, inFileNames, Context.Repository);
   Finally
     git_commit_free(commit);
 
