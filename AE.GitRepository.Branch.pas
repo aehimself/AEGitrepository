@@ -10,7 +10,7 @@ Unit AE.GitRepository.Branch;
 
 Interface
 
-Uses AE.GitRepository.HeadTarget, AE.GitRepository.Context, AE.GitRepository.BranchCommits;
+Uses AE.GitRepository.HeadTarget, AE.GitRepository.Context, AE.GitRepository.BranchCommits, AE.GitRepository.Submodules;
 
 Type
   TAEGitBranch = Class(TAEGitHeadTarget)
@@ -19,6 +19,7 @@ Type
     _incomingcommits: Integer;
     _name: String;
     _outgoingcommits: Integer;
+    _submodules: TAEGitSubmodules;
     Procedure UpdateCommitCount(Const inRemote: String);
   strict protected
     Procedure InternalCheckout; Override;
@@ -41,6 +42,7 @@ Type
     Property IncomingCommits: Integer Read _incomingcommits;
     Property Name: String Read _name;
     Property OutgoingCommits: Integer Read _outgoingcommits;
+    Property Submodules: TAEGitSubmodules Read _submodules;
   End;
 
 Implementation
@@ -107,6 +109,7 @@ Begin
   inherited Create(inContext);
 
   _commits := TAEGitBranchCommits.Create(Context, inBranchName);
+  _submodules := TAEGitSubmodules.Create(Context);
 
   _incomingcommits := 0;
   _name := inBranchName;
@@ -115,6 +118,7 @@ End;
 
 Destructor TAEGitBranch.Destroy;
 Begin
+  FreeAndNil(_submodules);
   FreeAndNil(_commits);
 
   inherited;

@@ -15,7 +15,7 @@ Uses AE.GitRepository.ContextedObject, libgit2;
 Type
   TAEGitRepositoryDiffCapableObject = Class(TAEGitRepositoryContextedObject)
   strict protected
-    Function GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>): String;
+    Function GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
     Function GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
   End;
 
@@ -23,7 +23,7 @@ Implementation
 
 uses AE.GitRepository.Context;
 
-Function TAEGitRepositoryDiffCapableObject.GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>): String;
+Function TAEGitRepositoryDiffCapableObject.GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
 Var
   parent: Pgit_commit;
   tree, parenttree: Pgit_tree;
@@ -74,7 +74,7 @@ Begin
     End;
 
     Try
-      Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree, tree, @options));
+      Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, inRepository, parenttree, tree, @options));
       Try
         Context.HandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
         Try
