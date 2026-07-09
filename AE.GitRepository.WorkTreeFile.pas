@@ -73,10 +73,25 @@ End;
 Procedure TAEGitWorkTreeFile.Stage;
 Var
   index: Pgit_index;
+  deleted: Boolean;
+  stat: TAEGitFileStatus;
 Begin
   Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
   Try
-    Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(Self.GitPath))));
+    deleted := False;
+
+    For stat In Self.Status Do
+      If stat = gfsDeleted Then
+      Begin
+        deleted := True;
+
+        Break;
+      End;
+
+    If deleted Then
+      Context.HandleLibGit2Output('git_index_remove_bypath', git_index_remove_bypath(index, PAnsiChar(UTF8String(Self.GitPath))))
+    Else
+      Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(Self.GitPath))));
 
     Context.HandleLibGit2Output('git_index_write', git_index_write(index));
   Finally

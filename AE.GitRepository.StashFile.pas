@@ -20,6 +20,7 @@ Type
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
+    Procedure UpdateStatus(Const inStatus: TAEGitFileStatus);
   End;
 
 Implementation
@@ -34,6 +35,11 @@ End;
 Function TAEGitStashFile.GetCommit(Const inRepository: Pgit_repository): Pgit_commit;
 Begin
   Result := Context.GetStashCommit(_stashindex);
+End;
+
+Procedure TAEGitStashFile.UpdateStatus(Const inStatus: TAEGitFileStatus);
+Begin
+  Self.InternalStatus := [inStatus];
 End;
 
 End.

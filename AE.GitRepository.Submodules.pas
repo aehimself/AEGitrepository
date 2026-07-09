@@ -10,10 +10,10 @@ Unit AE.GitRepository.Submodules;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, AE.GitRepository.Context, AE.GitRepository.SubModule, AE.GitRepository.SubModuleCommit, System.Generics.Collections;
+Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, AE.GitRepository.SubModule, AE.GitRepository.SubModuleCommit, System.Generics.Collections;
 
 Type
-  TAEGitSubmodules = Class(TAEGitRepositoryContextedObject)
+  TAEGitSubmodules = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitSubmodule>;
     _loaded: Boolean;
@@ -21,12 +21,13 @@ Type
     Function GetCurrentVersion(Const inSubmodulePath: String): TAEGitSubmoduleCommit;
     Function GetItem(Const inSubmodulePath: String): TAEGitSubmodule;
     Function GetPaths: TArray<String>;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); ReIntroduce; Virtual;
     Destructor Destroy; Override;
-    Procedure Clear;
     Procedure InitializeAll(Const inOverwrite: Boolean = False);
-    Procedure Refresh;
     Procedure UpdateAll(Const inInit: Boolean = True);
     Property CurrentCommit[Const inSubmodulePath: String]: TAEGitSubmoduleCommit Read GetCurrentCommit;
     Property CurrentVersion[Const inSubmodulePath: String]: TAEGitSubmoduleCommit Read GetCurrentVersion;
@@ -75,7 +76,6 @@ Begin
   inherited Create(inContext);
 
   _items := TObjectDictionary<String, TAEGitSubmodule>.Create([doOwnsValues]);
-  _loaded := False;
 End;
 
 Destructor TAEGitSubmodules.Destroy;
@@ -85,7 +85,7 @@ Begin
   inherited;
 End;
 
-Procedure TAEGitSubmodules.Clear;
+Procedure TAEGitSubmodules.InternalClear;
 Begin
   _items.Clear;
 
@@ -142,7 +142,7 @@ Begin
   TArray.Sort<String>(Result);
 End;
 
-Procedure TAEGitSubmodules.Refresh;
+Procedure TAEGitSubmodules.InternalRefresh;
 Var
   list: TList<String>;
   payload: TAEGitSubmoduleListPayload;
@@ -172,7 +172,7 @@ Begin
           _items.Add(path, submodule);
         End
         Else
-          submodule.Clear;
+          submodule.Refresh;
 
         keystoremove.Remove(path);
       End;

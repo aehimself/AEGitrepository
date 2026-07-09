@@ -10,25 +10,26 @@ Unit AE.GitRepository.WorkTree;
 
 Interface
 
-Uses AE.GitRepository.DiffCapableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context;
+Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context;
 
 Type
   TAEGitChangedFileList = Class(TDictionary<String, TArray<TAEGitFileStatus>>);
 
-  TAEGitWorkTree = Class(TAEGitRepositoryDiffCapableObject)
+  TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
     _loaded: Boolean;
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
     Destructor Destroy; Override;
     Procedure ApplyPatch(Const inPatch: String);
-    Procedure Clear;
     Procedure Commit(Const inCommitMessage: String);
-    Procedure Refresh;
     Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitWorkTreeFile Read GetFile;
@@ -43,8 +44,6 @@ Begin
   inherited;
 
   _items := TObjectDictionary<String, TAEGitWorkTreeFile>.Create([doOwnsValues]);
-
-  _loaded := False;
 End;
 
 Destructor TAEGitWorkTree.Destroy;
@@ -54,7 +53,7 @@ Begin
   inherited;
 End;
 
-Procedure TAEGitWorkTree.Clear;
+Procedure TAEGitWorkTree.InternalClear;
 Begin
   _items.Clear;
 
@@ -271,7 +270,7 @@ Begin
   Result := Self.GetPatchFromWorkTree(inFileNames, inStagedOnly);
 End;
 
-Procedure TAEGitWorkTree.Refresh;
+Procedure TAEGitWorkTree.InternalRefresh;
 Var
   changedFiles: TAEGitChangedFileList;
   remove: TList<String>;
