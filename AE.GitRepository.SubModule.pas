@@ -10,10 +10,10 @@ Unit AE.GitRepository.SubModule;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, AE.GitRepository.Context, AE.GitRepository.SubModuleCommit, System.Generics.Collections;
+Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, AE.GitRepository.SubModuleCommit, System.Generics.Collections;
 
 Type
-  TAEGitSubmodule = Class(TAEGitRepositoryContextedObject)
+  TAEGitSubmodule = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _loaded: Boolean;
     _name: String;
@@ -40,12 +40,13 @@ Type
     Function GetUrl: String;
     Function GetCommitsList: TArray<String>;
     Function GetWorkDirHash: String;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inPath: String); ReIntroduce; Virtual;
     Destructor Destroy; Override;
-    Procedure Clear;
     Procedure Initialize(Const inOverwrite: Boolean = False);
-    Procedure Refresh;
     Procedure Sync;
     Procedure Update(Const inInit: Boolean = True);
     Property CurrentCommit: TAEGitSubmoduleCommit Read GetCurrentCommit;
@@ -71,8 +72,6 @@ Begin
 
   _commitorder := TList<String>.Create;
   _items := TObjectDictionary<String, TAEGitSubmoduleCommit>.Create([doOwnsValues]);
-
-  Self.Clear;
   _path := inPath;
 End;
 
@@ -84,7 +83,7 @@ Begin
   inherited;
 End;
 
-Procedure TAEGitSubmodule.Clear;
+Procedure TAEGitSubmodule.InternalClear;
 Begin
   _loaded := False;
   _trackingbranch := '';
@@ -249,10 +248,8 @@ Begin
   _commitsloaded := True;
 End;
 
-Procedure TAEGitSubmodule.Refresh;
+Procedure TAEGitSubmodule.InternalRefresh;
 Begin
-  _items.Clear;
-  _commitorder.Clear;
   _commitsloaded := False;
 
   Self.LoadDetails;

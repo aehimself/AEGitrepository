@@ -10,25 +10,26 @@ Unit AE.GitRepository.Stashes;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, System.Generics.Collections, AE.GitRepository.Stash, AE.GitRepository.Context;
+Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.Stash, AE.GitRepository.Context;
 
 Type
   TAEGitStashList = Class(TList<String>);
 
   PAEGitStashList = ^TAEGitStashList;
 
-  TAEGitStashes = Class(TAEGitRepositoryContextedObject)
+  TAEGitStashes = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<Integer, TAEGitStash>;
     _loaded: Boolean;
     Function GetCount: Integer;
     Function GetItem(Const inStashIndex: Integer): TAEGitStash;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
     Destructor Destroy; Override;
-    Procedure Clear;
     Procedure Push(Const inStashMessage: String);
-    Procedure Refresh;
     Property Count: Integer Read GetCount;
     Property Items[Const inStashIndex: Integer]: TAEGitStash Read GetItem; Default;
   End;
@@ -55,7 +56,7 @@ End;
 // TAEGitStashes
 //
 
-Procedure TAEGitStashes.Clear;
+Procedure TAEGitStashes.InternalClear;
 Begin
   _items.Clear;
 
@@ -112,7 +113,7 @@ Begin
     Self.Refresh;
 End;
 
-Procedure TAEGitStashes.Refresh;
+Procedure TAEGitStashes.InternalRefresh;
 Var
   list: TAEGitStashList;
   keystoremove: TList<Integer>;

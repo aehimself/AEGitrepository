@@ -10,10 +10,10 @@ Unit AE.GitRepository.Branches;
 
 Interface
 
-Uses AE.GitRepository.ContextedObject, System.Generics.Collections, AE.GitRepository.HeadTarget, AE.GitRepository.Branch, AE.GitRepository.Context;
+Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.HeadTarget, AE.GitRepository.Branch, AE.GitRepository.Context;
 
 Type
-  TAEGitBranches = Class(TAEGitRepositoryContextedObject)
+  TAEGitBranches = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _current: TAEGitHeadTarget;
     _currentowned: Boolean;
@@ -24,12 +24,13 @@ Type
     Function GetCurrent: TAEGitHeadTarget;
     Function GetItem(Const inBranchName: String): TAEGitBranch;
     Function GetNames: TArray<String>;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
     Destructor Destroy; Override;
-    Procedure Clear;
     Procedure New(Const inBranchName: String);
-    Procedure Refresh;
     Procedure UpdateCurrent;
     Property Current: TAEGitHeadTarget Read GetCurrent;
     Property Names: TArray<String> Read GetNames;
@@ -40,7 +41,7 @@ Implementation
 
 Uses libgit2, System.SysUtils, AE.GitRepository.Commit;
 
-Procedure TAEGitBranches.Clear;
+Procedure TAEGitBranches.InternalClear;
 Begin
   Self.FreeCurrent;
 
@@ -54,7 +55,6 @@ Begin
 
   _items := TObjectDictionary<String, TAEGitBranch>.Create([doOwnsValues]);
   _order := TList<String>.Create;
-  _currentowned := False;
 End;
 
 Destructor TAEGitBranches.Destroy;
@@ -131,7 +131,7 @@ Begin
   Result := _order.ToArray;
 End;
 
-Procedure TAEGitBranches.Refresh;
+Procedure TAEGitBranches.InternalRefresh;
 Var
   names: TArray<String>;
   name: String;
@@ -190,8 +190,8 @@ Begin
       End
       Else
       Begin
-        branch.Commits.Clear;
-        branch.Submodules.Clear;
+        branch.Commits.Refresh;
+        branch.Submodules.Refresh;
       End;
 
       _order.Add(name);
