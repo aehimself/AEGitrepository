@@ -10,11 +10,9 @@ Unit AE.GitRepository.WorkTree;
 
 Interface
 
-Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context;
+Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context, AE.GitRepository.ChangedFileList;
 
 Type
-  TAEGitChangedFileList = Class(TDictionary<String, TArray<TAEGitFileStatus>>);
-
   TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
@@ -136,23 +134,6 @@ Var
   options: git_status_options;
   count, b: Integer;
   status: Pgit_status_entry;
-
-  Procedure AddFileStatus(Const inFileName: String; Const inStatus: TAEGitFileStatus);
-  Var
-    statuses: TArray<TAEGitFileStatus>;
-    len: Integer;
-  Begin
-    If inChangedFiles.TryGetValue(inFileName, statuses) Then
-    Begin
-      len := Length(statuses);
-      SetLength(statuses, len + 1);
-      statuses[len] := inStatus;
-
-      inChangedFiles[inFileName] := statuses;
-    End
-    Else
-      inChangedFiles.Add(inFileName, [inStatus]);
-  End;
 Begin
   Context.HandleLibGit2Output('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
 
@@ -174,49 +155,49 @@ Begin
         Continue;
 
       If (status.status And GIT_STATUS_INDEX_NEW) <> 0 Then
-        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew);
 
       If (status.status And GIT_STATUS_INDEX_MODIFIED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified);
 
       If (status.status And GIT_STATUS_INDEX_DELETED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted);
 
       If (status.status And GIT_STATUS_INDEX_RENAMED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed);
 
       If (status.status And GIT_STATUS_INDEX_TYPECHANGE) <> 0 Then
-        AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange);
 
       If (status.status And GIT_STATUS_WT_NEW) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew);
 
       If (status.status And GIT_STATUS_WT_MODIFIED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified);
 
       If (status.status And GIT_STATUS_WT_DELETED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted);
 
       If (status.status And GIT_STATUS_WT_RENAMED) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed);
 
       If (status.status And GIT_STATUS_WT_TYPECHANGE) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange);
 
       If (status.status And GIT_STATUS_WT_UNREADABLE) <> 0 Then
-        AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable);
+        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable);
 
       If (status.status And GIT_STATUS_CONFLICTED) <> 0 Then
         If Assigned(status.index_to_workdir) Then
-          AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted)
+          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted)
         Else
-          AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted);
+          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted);
 
       If status.status = GIT_STATUS_CURRENT Then
         If Assigned(status.index_to_workdir) Then
-          AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent)
+          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent)
         Else
-          AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent);
+          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent);
     End;
   Finally
     git_status_list_free(statuslist);
