@@ -17,6 +17,7 @@ Type
   strict private
     _context: TAEGitRepositoryContext;
   strict protected
+    Function GetPatchBetweenTrees(Const inFromTree: Pgit_tree; Const inToTree: Pgit_tree; Const inFileNames: TArray<String>): String;
     Function GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
     Function GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
     Property Context: TAEGitRepositoryContext Read _context;
@@ -129,6 +130,8 @@ Begin
 
   Context.HandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
 
+  options.flags := GIT_DIFF_INCLUDE_UNTRACKED Or GIT_DIFF_RECURSE_UNTRACKED_DIRS Or GIT_DIFF_SHOW_UNTRACKED_CONTENT;
+
   SetLength(utffilenames, Length(inFileNames));
   SetLength(filenames, Length(inFileNames));
 
@@ -165,6 +168,50 @@ Begin
   Else
     Context.HandleLibGit2Output('git_diff_index_to_workdir', git_diff_index_to_workdir(@diff, Context.Repository, nil, @options));
 
+  Try
+    Context.HandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
+    Try
+      Result := String(UTF8String(buf.ptr));
+    Finally
+      git_buf_dispose(@buf);
+
+      Context.DoLibGit2Call('git_buf_dispose');
+    End;
+  Finally
+    git_diff_free(diff);
+
+    Context.DoLibGit2Call('git_diff_free');
+  End;
+End;
+
+Function TAEGitRepositoryContextedObject.GetPatchBetweenTrees(Const inFromTree: Pgit_tree; Const inToTree: Pgit_tree; Const inFileNames: TArray<String>): String;
+Var
+  diff: Pgit_diff;
+  options: git_diff_options;
+  buf: git_buf;
+  utffilenames: TArray<UTF8String>;
+  filenames: TArray<PAnsiChar>;
+  a: NativeInt;
+Begin
+  Result := '';
+
+  FillChar(buf, SizeOf(buf), 0);
+
+  Context.HandleLibGit2Output('git_diff_options_init', git_diff_options_init(@options, GIT_DIFF_OPTIONS_VERSION));
+
+  SetLength(utffilenames, Length(inFileNames));
+  SetLength(filenames, Length(inFileNames));
+
+  For a := Low(inFileNames) To High(inFileNames) Do
+  Begin
+    utffilenames[a] := UTF8String(inFileNames[a]);
+    filenames[a] := PAnsiChar(utffilenames[a]);
+  End;
+
+  options.pathspec.count := Length(filenames);
+  options.pathspec.strings := @filenames[0];
+
+  Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, inFromTree, inToTree, @options));
   Try
     Context.HandleLibGit2Output('git_diff_to_buf', git_diff_to_buf(@buf, diff, GIT_DIFF_FORMAT_PATCH));
     Try

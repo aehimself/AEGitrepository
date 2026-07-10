@@ -41,7 +41,7 @@ Type
 
 Implementation
 
-Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, AE.GitRepository.CommitFile;
+Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, AE.GitRepository.CommitFile, AE.GitRepository.ChangedFileList;
 
 Procedure TAEGitStash.InternalClear;
 Begin
@@ -130,128 +130,257 @@ End;
 
 Procedure TAEGitStash.InternalRefresh;
 Var
-  commit, parent: Pgit_commit;
-  tree, parenttree: Pgit_tree;
-  count: Cardinal;
+  changedfiles: TAEGitChangedFileList;
+  stashcommit, parent0, parent1, parent2: Pgit_commit;
+  stashtree, parenttree0, parenttree1, parenttree2: Pgit_tree;
+  parentcount: Cardinal;
   diff: Pgit_diff;
-  filecount: size_t;
-  a: NativeUInt;
-  delta: Pgit_diff_delta;
-  filename: String;
-  filestatus: TAEGitFileStatus;
   stashfile: TAEGitStashFile;
   keystoremove: TList<String>;
+  pair: TPair<String, TArray<TAEGitFileStatus>>;
+  key: String;
+
+  Procedure ProcessDiff(Const inDiff: Pgit_diff; Const inIsStaged: Boolean);
+  Var
+    filecount: size_t;
+    a: NativeUInt;
+    delta: Pgit_diff_delta;
+    filename: String;
+    filestatus: TAEGitFileStatus;
+  Begin
+    filecount := git_diff_num_deltas(inDiff);
+
+    Context.DoLibGit2Call('git_diff_num_deltas');
+
+    If filecount = 0 Then
+      Exit;
+
+    For a := 0 To filecount - 1 Do
+    Begin
+      delta := git_diff_get_delta(inDiff, a);
+
+      Context.DoLibGit2Call('git_diff_get_delta');
+
+      If Length(delta.new_file.path) <> 0 Then
+        filename := String(UTF8String(delta.new_file.path))
+      Else
+        filename := String(UTF8String(delta.old_file.path));
+
+      If inIsStaged Then
+        Case delta.status Of
+          GIT_DELTA_UNMODIFIED:
+            filestatus := gfsCurrent;
+          GIT_DELTA_ADDED:
+            filestatus := gfsStagedNew;
+          GIT_DELTA_DELETED:
+            filestatus := gfsStagedDeleted;
+          GIT_DELTA_MODIFIED:
+            filestatus := gfsStagedModified;
+          GIT_DELTA_RENAMED:
+            filestatus := gfsStagedRenamed;
+          GIT_DELTA_TYPECHANGE:
+            filestatus := gfsStagedTypeChange;
+          Else
+            filestatus := gfsConflicted;
+        End
+      Else
+        Case delta.status Of
+          GIT_DELTA_UNMODIFIED:
+            filestatus := gfsCurrent;
+          GIT_DELTA_ADDED:
+            filestatus := gfsNew;
+          GIT_DELTA_DELETED:
+            filestatus := gfsDeleted;
+          GIT_DELTA_MODIFIED:
+            filestatus := gfsModified;
+          GIT_DELTA_RENAMED:
+            filestatus := gfsRenamed;
+          GIT_DELTA_COPIED:
+            filestatus := gfsCopied;
+          GIT_DELTA_IGNORED:
+            filestatus := gfsIgnored;
+          GIT_DELTA_UNTRACKED:
+            filestatus := gfsUntracked;
+          GIT_DELTA_TYPECHANGE:
+            filestatus := gfsTypeChange;
+          GIT_DELTA_UNREADABLE:
+            filestatus := gfsUnreadable;
+          Else
+            filestatus := gfsConflicted;
+        End;
+
+      changedfiles.AddFileStatus(filename, filestatus);
+    End;
+  End;
 Begin
   _loaded := False;
 
-  keystoremove := TList<String>.Create;
+  changedfiles := TAEGitChangedFileList.Create;
   Try
-    keystoremove.AddRange(_items.Keys);
-
-    commit := Context.GetStashCommit(_index);
+    keystoremove := TList<String>.Create;
     Try
-      Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@tree, commit));
+      keystoremove.AddRange(_items.Keys);
+
+      stashcommit := Context.GetStashCommit(_index);
       Try
-        count := git_commit_parentcount(commit);
+        parentcount := git_commit_parentcount(stashcommit);
 
         Context.DoLibGit2Call('git_commit_parentcount');
 
-        parent := nil;
-        parenttree := nil;
-
-        If count > 0 Then
+        If parentcount >= 2 Then
         Begin
-          Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
-
-          Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
-        End;
-
-        Try
-          Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree, tree, nil));
+          Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent0, stashcommit, 0));
           Try
-            filecount := git_diff_num_deltas(diff);
+            Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent1, stashcommit, 1));
+            Try
+              Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree0, parent0));
+              Try
+                Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree1, parent1));
+                Try
+                  Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@stashtree, stashcommit));
+                  Try
+                    // Staged: HEAD -> index
+                    Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree0, parenttree1, nil));
+                    Try
+                      ProcessDiff(diff, True);
+                    Finally
+                      git_diff_free(diff);
 
-            Context.DoLibGit2Call('git_diff_num_deltas');
+                      Context.DoLibGit2Call('git_diff_free');
+                    End;
 
-            If filecount > 0 Then
-              For a := 0 To filecount - 1 Do
-              Begin
-                delta := git_diff_get_delta(diff, a);
+                    // Unstaged: index -> stash WD
+                    Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree1, stashTree, nil));
+                    Try
+                      ProcessDiff(diff, False);
+                    Finally
+                      git_diff_free(diff);
 
-                Context.DoLibGit2Call('git_diff_get_delta');
+                      Context.DoLibGit2Call('git_diff_free');
+                    End;
+                  Finally
+                    git_tree_free(stashtree);
 
-                If Length(delta.new_file.path) <> 0 Then
-                  filename := String(UTF8String(delta.new_file.path))
-                Else
-                  filename := String(UTF8String(delta.old_file.path));
+                    Context.DoLibGit2Call('git_tree_free');
+                  End;
+                Finally
+                  git_tree_free(parenttree1);
 
-                Case delta.status Of
-                  GIT_DELTA_UNMODIFIED:
-                    filestatus := gfsCurrent;
-                  GIT_DELTA_ADDED:
-                    filestatus := gfsNew;
-                  GIT_DELTA_DELETED:
-                    filestatus := gfsDeleted;
-                  GIT_DELTA_MODIFIED:
-                    filestatus := gfsModified;
-                  GIT_DELTA_RENAMED:
-                    filestatus := gfsRenamed;
-                  GIT_DELTA_COPIED:
-                    filestatus := gfsCopied;
-                  GIT_DELTA_IGNORED:
-                    filestatus := gfsIgnored;
-                  GIT_DELTA_UNTRACKED:
-                    filestatus := gfsUntracked;
-                  GIT_DELTA_TYPECHANGE:
-                    filestatus := gfsTypeChange;
-                  GIT_DELTA_UNREADABLE:
-                    filestatus := gfsUnreadable;
-                  Else
-                    filestatus := gfsConflicted;
+                  Context.DoLibGit2Call('git_tree_free');
                 End;
+              Finally
+                git_tree_free(parenttree0);
 
-                If Not _items.TryGetValue(filename, stashfile) Then
-                  _items.Add(filename, TAEGitStashFile.Create(Context, filename, _index, filestatus))
-                Else If stashfile.Status <> filestatus Then
-                  stashfile.UpdateStatus(filestatus);
-
-                keystoremove.Remove(filename);
+                Context.DoLibGit2Call('git_tree_free');
               End;
+            Finally
+              git_commit_free(parent1);
 
-            For filename In keystoremove Do
-              _items.Remove(filename);
+              Context.DoLibGit2Call('git_commit_free');
+            End;
           Finally
-            git_diff_free(diff);
-
-            Context.DoLibGit2Call('git_diff_free');
-          End;
-        Finally
-          If Assigned(parenttree) Then
-          Begin
-            git_tree_free(parenttree);
-
-            Context.DoLibGit2Call('git_tree_free');
-          End;
-
-          If Assigned(parent) Then
-          Begin
-            git_commit_free(parent);
+            git_commit_free(parent0);
 
             Context.DoLibGit2Call('git_commit_free');
           End;
+
+          // Untracked: nil -> parent[2]
+          If parentcount >= 3 Then
+          Begin
+            Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent2, stashcommit, 2));
+            Try
+              Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree2, parent2));
+              Try
+                Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, nil, parenttree2, nil));
+                Try
+                  ProcessDiff(diff, False);
+                Finally
+                  git_diff_free(diff);
+
+                  Context.DoLibGit2Call('git_diff_free');
+                End;
+              Finally
+                git_tree_free(parenttree2);
+
+                Context.DoLibGit2Call('git_tree_free');
+              End;
+            Finally
+              git_commit_free(parent2);
+
+              Context.DoLibGit2Call('git_commit_free');
+            End;
+          End;
+        End
+        Else
+        Begin
+          // Fallback: diff against single parent or empty tree
+          parent0 := nil;
+          parenttree0 := nil;
+
+          Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@stashtree, stashcommit));
+          Try
+            If parentcount = 1 Then
+            Begin
+              Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent0, stashcommit, 0));
+              Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree0, parent0));
+            End;
+
+            Try
+              Context.HandleLibGit2Output('git_diff_tree_to_tree', git_diff_tree_to_tree(@diff, Context.Repository, parenttree0, stashtree, nil));
+              Try
+                ProcessDiff(diff, False);
+              Finally
+                git_diff_free(diff);
+
+                Context.DoLibGit2Call('git_diff_free');
+              End;
+            Finally
+              If Assigned(parenttree0) Then
+              Begin
+                git_tree_free(parenttree0);
+
+                Context.DoLibGit2Call('git_tree_free');
+              End;
+
+              If Assigned(parent0) Then
+              Begin
+                git_commit_free(parent0);
+
+                Context.DoLibGit2Call('git_commit_free');
+              End;
+            End;
+          Finally
+            git_tree_free(stashtree);
+
+            Context.DoLibGit2Call('git_tree_free');
+          End;
         End;
       Finally
-        git_tree_free(tree);
+        git_commit_free(stashcommit);
 
-        Context.DoLibGit2Call('git_tree_free');
+        Context.DoLibGit2Call('git_commit_free');
       End;
-    Finally
-      git_commit_free(commit);
 
-      Context.DoLibGit2Call('git_commit_free');
+      For pair In changedfiles Do
+      Begin
+        If Not _items.TryGetValue(pair.Key, stashfile) Then
+        Begin
+          stashfile := TAEGitStashFile.Create(Context, pair.Key, _index, pair.Value[0]);
+          _items.Add(pair.Key, stashfile);
+        End;
+
+        stashfile.UpdateStatus(pair.Value);
+
+        keystoremove.Remove(pair.Key);
+      End;
+
+      For key In keystoremove Do
+        _items.Remove(key);
+    Finally
+      FreeAndNil(keystoremove);
     End;
   Finally
-    FreeAndNil(keystoremove);
+    FreeAndNil(changedfiles);
   End;
 
   _loaded := True;
