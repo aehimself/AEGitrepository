@@ -420,26 +420,33 @@ Begin
   _branches := [];
   _head := False;
 
-  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/tags/*'))));
+  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, 'refs/tags/*'));
   Try
     While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
-    Begin
+    Try
+      Context.HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, ref, GIT_OBJECT_COMMIT));
       Try
-        If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
+        oid := git_object_id(obj);
+
+        Context.DoLibGit2Call('git_object_id');
+
+        hash := Context.OidToString(oid);
+
+        If hash = _hash Then
         Begin
           shortname := git_reference_shorthand(ref);
 
           Context.DoLibGit2Call('git_reference_shorthand');
 
-          name := String(UTF8String(shortname));
-
-          AddUniqueString(_tags, name);
+          AddUniqueString(_tags, String(UTF8String(shortname)));
         End;
       Finally
-        git_reference_free(ref);
+        git_object_free(obj);
 
-        Context.DoLibGit2Call('git_reference_free');
-      End;
+        Context.DoLibGit2Call('git_object_free');
+      End
+    Finally
+      git_reference_free(ref);
     End;
   Finally
     git_reference_iterator_free(iterator);
@@ -549,7 +556,7 @@ Begin
 
     Context.DoLibGit2Call('git_commit_message');
 
-    If _message = _summary Then
+    If _message.Trim = _summary Then
       _message := '';
 
     _original_timestamp := git_commit_time(commit);
