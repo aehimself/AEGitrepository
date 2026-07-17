@@ -25,20 +25,16 @@ Type
     _datetime: TDateTime;
     _detailsloaded: Boolean;
     _hash: String;
-    _head: Boolean;
     _message: String;
     _original_offset: Integer;
     _original_timestamp: git_time_t;
     _parentcommithashes: TArray<String>;
     _summary: String;
     _tags: TArray<String>;
-    Procedure AddUniqueString(Var outArray: TArray<String>; Const inValue: String);
-    Procedure LoadDecorations;
     Procedure LoadDetails;
     Procedure LoadFiles;
     Function GetAuthor: String;
     Function GetAuthorEmail: String;
-    Function GetBranches: TArray<String>;
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitCommitFile;
     Function GetCommitter: String;
@@ -48,7 +44,6 @@ Type
     Function GetMessage: String;
     Function GetParentCommitHashes: TArray<String>;
     Function GetSummary: String;
-    Function GetTags: TArray<String>;
   strict protected
     Procedure InternalCheckout; Override;
   public
@@ -60,7 +55,7 @@ Type
     Function Diff: String;
     Property Author: String Read GetAuthor;
     Property AuthorEmail: String Read GetAuthorEmail;
-    Property Branches: TArray<String> Read GetBranches;
+    Property Branches: TArray<String> Read _branches Write _branches;
     Property Committer: String Read GetCommitter;
     Property CommitterEmail: String Read GetCommitterEmail;
     Property DateTime: TDateTime Read GetDateTime;
@@ -71,7 +66,7 @@ Type
     Property Message: String Read GetMessage;
     Property ParentCommitHashes: TArray<String> Read GetParentCommitHashes;
     Property Summary: String Read GetSummary;
-    Property Tags: TArray<String> Read GetTags;
+    Property Tags: TArray<String> Read _tags Write _tags;
   End;
 
 Implementation
@@ -183,7 +178,6 @@ Begin
   _committeremail := '';
   _datetime := 0;
   _detailsloaded := False;
-  _head := False;
   _message := '';
   _original_offset := 0;
   _original_timestamp := 0;
@@ -208,19 +202,6 @@ Begin
   FreeAndNil(_changedfiles);
 
   inherited;
-End;
-
-Procedure TAEGitCommit.AddUniqueString(Var outArray: TArray<String>; Const inValue: String);
-Var
-  s: String;
-Begin
-  For s In outArray DO
-    If s = inValue Then
-      Exit;
-
-  SetLength(outArray, Length(outArray) + 1);
-
-  outArray[High(outArray)] := inValue;
 End;
 
 Procedure TAEGitCommit.InternalCheckout;
@@ -302,10 +283,7 @@ End;
 
 Function TAEGitCommit.GetHead: Boolean;
 Begin
-  If Not _detailsloaded Then
-    Self.LoadDetails;
-
-  Result := _head;
+  Result := Context.CommitIsHead(_hash);
 End;
 
 Function TAEGitCommit.GetMessage: String;
@@ -332,14 +310,6 @@ Begin
   Result := _summary;
 End;
 
-Function TAEGitCommit.GetTags: TArray<String>;
-Begin
-  If Not _detailsloaded Then
-    Self.LoadDetails;
-
-  Result := _tags;
-End;
-
 Function TAEGitCommit.GetAuthor: String;
 Begin
   If Not _detailsloaded Then
@@ -356,167 +326,12 @@ Begin
   Result := _authoremail;
 End;
 
-Function TAEGitCommit.GetBranches: TArray<String>;
-Begin
-  If Not _detailsloaded Then
-    Self.LoadDetails;
-
-  Result := _branches;
-End;
-
 Function TAEGitCommit.GetFile(Const inGitPath: String): TAEGitCommitFile;
 Begin
   If Not _changedfilesloaded Then
     Self.LoadFiles;
 
   Result := _changedfiles[inGitPath];
-End;
-
-Procedure TAEGitCommit.LoadDecorations;
-Var
-  iterator: Pgit_reference_iterator;
-  ref, headref: Pgit_reference;
-  shortname: PAnsiChar;
-  name, hash: String;
-  oid: Pgit_oid;
-  obj: Pgit_object;
-
-  Function TryGetCommitHashFromReference(Const inRef: Pgit_reference; out outHash: String): Boolean;
-  Begin
-    Result := False;
-    outHash := '';
-
-    oid := git_reference_target(inRef);
-
-    Context.DoLibGit2Call('git_reference_target');
-
-    If Assigned(oid) Then
-    Begin
-      outHash := Context.OidToString(oid);
-
-      Exit(True);
-    End;
-
-    If Context.HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), False) Then
-    Try
-      oid := git_object_id(obj);
-
-      Context.DoLibGit2Call('git_object_id');
-
-      If Assigned(oid) Then
-      Begin
-        outHash := Context.OidToString(oid);
-
-        Result := True;
-      End;
-    Finally
-      git_object_free(obj);
-
-      Context.DoLibGit2Call('git_object_free');
-    End;
-  End;
-Begin
-  _tags := [];
-  _branches := [];
-  _head := False;
-
-  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, 'refs/tags/*'));
-  Try
-    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
-    Try
-      Context.HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, ref, GIT_OBJECT_COMMIT));
-      Try
-        oid := git_object_id(obj);
-
-        Context.DoLibGit2Call('git_object_id');
-
-        hash := Context.OidToString(oid);
-
-        If hash = _hash Then
-        Begin
-          shortname := git_reference_shorthand(ref);
-
-          Context.DoLibGit2Call('git_reference_shorthand');
-
-          AddUniqueString(_tags, String(UTF8String(shortname)));
-        End;
-      Finally
-        git_object_free(obj);
-
-        Context.DoLibGit2Call('git_object_free');
-      End
-    Finally
-      git_reference_free(ref);
-    End;
-  Finally
-    git_reference_iterator_free(iterator);
-
-    Context.DoLibGit2Call('git_reference_iterator_free');
-  End;
-
-  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/heads/*'))));
-  Try
-    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
-    Begin
-      Try
-        If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
-        Begin
-          shortname := git_reference_shorthand(ref);
-
-          Context.DoLibGit2Call('git_reference_shorthand');
-
-          name := String(UTF8String(shortname));
-
-          AddUniqueString(_branches, name);
-        End;
-      Finally
-        git_reference_free(ref);
-
-        Context.DoLibGit2Call('git_reference_free');
-      End;
-    End;
-  Finally
-    git_reference_iterator_free(iterator);
-
-    Context.DoLibGit2Call('git_reference_iterator_free');
-  End;
-
-  Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, Context.Repository, PAnsiChar(UTF8String('refs/remotes/*'))));
-  Try
-    While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
-    Begin
-      Try
-        If TryGetCommitHashFromReference(ref, hash) And (hash = _hash) Then
-        Begin
-          shortname := git_reference_shorthand(ref);
-
-          Context.DoLibGit2Call('git_reference_shorthand');
-
-          name := String(UTF8String(shortname));
-
-          AddUniqueString(_branches, name);
-        End;
-      Finally
-        git_reference_free(ref);
-
-        Context.DoLibGit2Call('git_reference_free');
-      End;
-    End;
-  Finally
-    git_reference_iterator_free(iterator);
-
-    Context.DoLibGit2Call('git_reference_iterator_free');
-  End;
-
-  If Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository), False) Then
-  Try
-    If TryGetCommitHashFromReference(headref, hash) Then
-      _head := hash = _hash;
-  Finally
-    git_reference_free(headref);
-
-    Context.DoLibGit2Call('git_reference_free');
-  End;
 End;
 
 Procedure TAEGitCommit.LoadDetails;
@@ -589,7 +404,8 @@ Begin
     Context.DoLibGit2Call('git_commit_free');
   End;
 
-  LoadDecorations;
+  _branches := Context.CommitBranches(_hash);
+  _tags := Context.CommitTags(_hash);
 
   _detailsloaded := True;
 End;
