@@ -11,11 +11,12 @@ Unit AE.GitRepository;
 Interface
 
 Uses libgit2, AE.GitRepository.TypeDef, AE.GitRepository.Settings, AE.GitRepository.Context, AE.GitRepository.Branches,
-     AE.GitRepository.Stashes, AE.GitRepository.WorkTree;
+     AE.GitRepository.Stashes, AE.GitRepository.WorkTree, AE.GitRepository.CommitDecorationCache;
 
 Type
   TAEGitRepository = Class(TAEGitRepositoryContext)
   strict private
+    _commitdecorationcache: TAEGitCommitDecorationCache;
     _branches: TAEGitBranches;
     _onblockconflict: TAEGitBlockConflictCallback;
     _onlibgit2call: TAELibGit2CallLogEvent;
@@ -26,17 +27,20 @@ Type
     _stashes: TAEGitStashes;
     _worktree: TAEGitWorkTree;
     Procedure SetRepoDir(Const inRepoDir: String);
+    Function GetCommitDecorationCache: TAEGitCommitDecorationCache;
   protected
+    Procedure ClearCommitDecoCache;
     Procedure CloseGitRepository;
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure OpenGitRepository;
+    Procedure RefreshCommitDecoCache;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function GetDefaultRemoteName: String;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
     Function SolveConflicts: Boolean;
-  protected
+    Property CommitDecoCache: TAEGitCommitDecorationCache Read GetCommitDecorationCache;
     Property LibGit2Repository: Pgit_repository Read _repo;
   public
     Constructor Create; ReIntroduce; Virtual;
@@ -53,7 +57,7 @@ Type
 
 Implementation
 
-Uses System.SysUtils, AE.GitRepository.Exception,System.IOUtils;
+Uses System.SysUtils, AE.GitRepository.Exception,System.IOUtils, System.Generics.Collections;
 
 Function TAEGitRepository.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
 Var
@@ -284,6 +288,12 @@ Begin
     Result := -1;
 End;
 
+Procedure TAEGitRepository.ClearCommitDecoCache;
+Begin
+  If _commitdecorationcache.Loaded Then
+    _commitdecorationcache.Clear;
+End;
+
 Procedure TAEGitRepository.CloseGitRepository;
 Begin
   If Not Assigned(_repo) Then
@@ -294,6 +304,146 @@ Begin
   DoLibGit2Call('git_repository_free');
 
   _repo := nil;
+End;
+
+Procedure TAEGitRepository.RefreshCommitDecoCache;
+Var
+  iterator: Pgit_reference_iterator;
+  ref, headref: Pgit_reference;
+  shortname: PAnsiChar;
+  hash: String;
+  oid: Pgit_oid;
+  obj: Pgit_object;
+
+  Function TryGetCommitHashFromReference(Const inRef: Pgit_reference; out outHash: String): Boolean;
+  Begin
+    Result := False;
+    outHash := '';
+
+    oid := git_reference_target(inRef);
+
+    DoLibGit2Call('git_reference_target');
+
+    If Assigned(oid) Then
+    Begin
+      outHash := OidToString(oid);
+
+      Exit(True);
+    End;
+
+    If HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), False) Then
+    Try
+      oid := git_object_id(obj);
+
+      DoLibGit2Call('git_object_id');
+
+      If Assigned(oid) Then
+      Begin
+        outHash := OidToString(oid);
+
+        Result := True;
+      End;
+    Finally
+      git_object_free(obj);
+
+      DoLibGit2Call('git_object_free');
+    End;
+  End;
+Begin
+  _commitdecorationcache.Clear;
+
+  HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/tags/*'))));
+  Try
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    Try
+      HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, ref, GIT_OBJECT_COMMIT));
+      Try
+        oid := git_object_id(obj);
+
+        DoLibGit2Call('git_object_id');
+
+        hash := OidToString(oid);
+
+        shortname := git_reference_shorthand(ref);
+
+        DoLibGit2Call('git_reference_shorthand');
+
+        _commitdecorationcache.AddCommitTag(hash, String(UTF8String(shortname)));
+      Finally
+        git_object_free(obj);
+
+        DoLibGit2Call('git_object_free');
+      End
+    Finally
+      git_reference_free(ref);
+    End;
+  Finally
+    git_reference_iterator_free(iterator);
+
+    DoLibGit2Call('git_reference_iterator_free');
+  End;
+
+  HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/heads/*'))));
+  Try
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    Begin
+      Try
+        If TryGetCommitHashFromReference(ref, hash) Then
+        Begin
+          shortname := git_reference_shorthand(ref);
+
+          DoLibGit2Call('git_reference_shorthand');
+
+          _commitdecorationcache.AddCommitBranch(hash, String(UTF8String(shortname)));
+        End;
+      Finally
+        git_reference_free(ref);
+
+        DoLibGit2Call('git_reference_free');
+      End;
+    End;
+  Finally
+    git_reference_iterator_free(iterator);
+
+    DoLibGit2Call('git_reference_iterator_free');
+  End;
+
+  HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/remotes/*'))));
+  Try
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    Begin
+      Try
+        If TryGetCommitHashFromReference(ref, hash) Then
+        Begin
+          shortname := git_reference_shorthand(ref);
+
+          DoLibGit2Call('git_reference_shorthand');
+
+          _commitdecorationcache.AddCommitBranch(hash, String(UTF8String(shortname)));
+        End;
+      Finally
+        git_reference_free(ref);
+
+        DoLibGit2Call('git_reference_free');
+      End;
+    End;
+  Finally
+    git_reference_iterator_free(iterator);
+
+    DoLibGit2Call('git_reference_iterator_free');
+  End;
+
+  If HandleLibGit2Output('git_repository_head', git_repository_head(@headref, _repo), False) Then
+  Try
+    If TryGetCommitHashFromReference(headref, hash) Then
+      _commitdecorationcache.Head := hash;
+  Finally
+    git_reference_free(headref);
+
+    DoLibGit2Call('git_reference_free');
+  End;
+
+  _commitdecorationcache.Loaded := True;
 End;
 
 Function TAEGitRepository.ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
@@ -402,6 +552,7 @@ Begin
 
   _settings := TAEGitRepositorySettings.Create;
   _branches := TAEGitBranches.Create(Self);
+  _commitdecorationcache := TAEGitCommitDecorationCache.Create;
   _stashes := TAEGitStashes.Create(Self);
   _worktree := TAEGitWorkTree.Create(Self);
 
@@ -416,6 +567,7 @@ Destructor TAEGitRepository.Destroy;
 Begin
   FreeAndNil(_worktree);
   FreeAndNil(_stashes);
+  FreeAndNil(_commitdecorationcache);
   FreeAndNil(_branches);
 
   If Assigned(_repo) Then
@@ -430,6 +582,14 @@ Procedure TAEGitRepository.DoLibGit2Call(Const inMethod: String; Const inErrorCo
 Begin
   If Assigned(_onlibgit2call) Then
     _onlibgit2call(Self, inMethod, inErrorCode);
+End;
+
+Function TAEGitRepository.GetCommitDecorationCache: TAEGitCommitDecorationCache;
+Begin
+  If Not _commitdecorationcache.Loaded Then
+    RefreshCommitDecoCache;
+
+  Result := _commitdecorationcache;
 End;
 
 Function TAEGitRepository.GetDefaultRemoteName: String;

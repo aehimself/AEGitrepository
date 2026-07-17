@@ -18,19 +18,24 @@ Type
 
   TAEGitRepositoryContextHelper = Class Helper For TAEGitRepositoryContext
   public
-    Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
-    Function GetDefaultRemoteName: String;
-    Function OidToString(Const inOid: Pgit_oid): String;
-    Function GetSettings: TAEGitRepositorySettings;
-    Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
-    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
-    Function Repository: Pgit_repository;
-    Function SolveConflicts: Boolean;
+    Procedure ClearCommitDecorationCache;
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure UpdateCurrentBranch;
     Procedure RefreshBranches;
+    Procedure RefreshCommitDecorationCache;
     Procedure RefreshWorkTree;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
+    Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
+    Function CommitBranches(COnst inCommitHash: String): TArray<String>;
+    Function CommitIsHead(Const inCommitHash: String): Boolean;
+    Function CommitTags(Const inCommitHash: String): TArray<String>;
+    Function GetDefaultRemoteName: String;
+    Function GetSettings: TAEGitRepositorySettings;
+    Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
+    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function OidToString(Const inOid: Pgit_oid): String;
+    Function Repository: Pgit_repository;
+    Function SolveConflicts: Boolean;
   End;
 
 Implementation
@@ -113,6 +118,35 @@ Begin
   Result := TAEGitRepositoryAccess(Self As TAEGitRepository).SolveConflicts;
 End;
 
+Procedure TAEGitRepositoryContextHelper.ClearCommitDecorationCache;
+Begin
+  TAEGitRepositoryAccess(Self As TAEGitRepository).ClearCommitDecoCache;
+End;
+
+Function TAEGitRepositoryContextHelper.CommitBranches(Const inCommitHash: String): TArray<String>;
+Begin
+  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
+    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+
+  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.CommitBranches(inCommitHash);
+End;
+
+Function TAEGitRepositoryContextHelper.CommitIsHead(Const inCommitHash: String): Boolean;
+Begin
+  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
+    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+
+  Result := inCommitHash = TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Head;
+End;
+
+Function TAEGitRepositoryContextHelper.CommitTags(Const inCommitHash: String): TArray<String>;
+Begin
+  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
+    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+
+  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.CommitTags(inCommitHash);
+End;
+
 Procedure TAEGitRepositoryContextHelper.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
   TAEGitRepositoryAccess(Self As TAEGitRepository).DoLibGit2Call(inMethod, inErrorCode);
@@ -126,6 +160,11 @@ End;
 Procedure TAEGitRepositoryContextHelper.RefreshBranches;
 Begin
   (Self As TAEGitRepository).Branches.Refresh;
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshCommitDecorationCache;
+Begin
+  TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshWorkTree;

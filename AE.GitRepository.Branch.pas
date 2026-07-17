@@ -535,6 +535,9 @@ Begin
   End;
 
   UpdateCommitCount(inRemote);
+
+  If inDownloadTags Then
+    Context.ClearCommitDecorationCache;
 End;
 
 Procedure TAEGitBranch.Push(inRemote: String = '');
