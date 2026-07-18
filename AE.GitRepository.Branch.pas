@@ -451,6 +451,13 @@ Begin
 
     Context.DoLibGit2Call('git_reference_free');
   End;
+
+  If (_incomingcommits > 0) Or (_outgoingcommits > 0) Then
+  Begin
+    _commits.Clear;
+
+    Context.ClearCommitDecorationCache;
+  End;
 End;
 
 Procedure TAEGitBranch.Fetch(inRemote: String = ''; Const inDownloadTags: Boolean = False);
