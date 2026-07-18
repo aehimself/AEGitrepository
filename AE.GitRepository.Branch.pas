@@ -376,8 +376,11 @@ Var
   ahead, behind: size_t;
   walk: Pgit_revwalk;
   refiterator: Pgit_reference_iterator;
-  a: Integer;
+  a, previncoming, prevoutgoing: Integer;
 Begin
+  previncoming := _incomingcommits;
+  prevoutgoing := _outgoingcommits;
+
   Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@localoid, Context.Repository, PAnsiChar(UTF8String('refs/heads/' + _name))));
 
   Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository));
@@ -452,11 +455,12 @@ Begin
     Context.DoLibGit2Call('git_reference_free');
   End;
 
-  If (_incomingcommits > 0) Or (_outgoingcommits > 0) Then
+  If (_incomingcommits > previncoming) Or (_outgoingcommits > prevoutgoing) Then
   Begin
-    _commits.Clear;
-
     Context.ClearCommitDecorationCache;
+
+    If _commits.Loaded Then
+      _commits.Refresh;
   End;
 End;
 

@@ -32,6 +32,7 @@ Type
     Destructor Destroy; Override;
     Property CommitHashes: TArray<String> Read GetCommitHashes;
     Property Items[Const inCommitHash: String]: TAEGitCommit Read GetItem; Default;
+    Property Loaded: Boolean Read _loaded;
   End;
 
 implementation
@@ -212,7 +213,6 @@ Begin
     Exit;
   End;
 
-  refname := 'refs/heads/' + _branchname;
   refname := 'refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname;
 
   If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
