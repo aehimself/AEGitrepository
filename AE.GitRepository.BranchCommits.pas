@@ -201,7 +201,6 @@ Var
   refname, newheadhash: String;
   newheadoid, oldheadoid: git_oid;
   isfastforward: Boolean;
-  commit: TAEGitCommit;
 Begin
   _loaded := False;
 
@@ -246,12 +245,6 @@ Begin
     Self.RefreshFullReconcile;
 
   Context.ClearCommitDecorationCache;
-
-  For commit In _items.Values Do
-  Begin
-    commit.Branches := Context.CommitBranches(commit.Hash);
-    commit.Tags := Context.CommitTags(commit.Hash);
-  End;
 
   _lastheadhash := newheadhash;
   _loaded := True;

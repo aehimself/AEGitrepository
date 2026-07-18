@@ -17,7 +17,6 @@ Type
   strict private
     _author: String;
     _authoremail: String;
-    _branches: TArray<String>;
     _changedfiles: TAEGitCommitFileList;
     _changedfilesloaded: Boolean;
     _committer: String;
@@ -30,11 +29,11 @@ Type
     _original_timestamp: git_time_t;
     _parentcommithashes: TArray<String>;
     _summary: String;
-    _tags: TArray<String>;
     Procedure LoadDetails;
     Procedure LoadFiles;
     Function GetAuthor: String;
     Function GetAuthorEmail: String;
+    Function GetBranches: TArray<String>;
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitCommitFile;
     Function GetCommitter: String;
@@ -44,18 +43,21 @@ Type
     Function GetMessage: String;
     Function GetParentCommitHashes: TArray<String>;
     Function GetSummary: String;
+    Function GetTags: TArray<String>;
   strict protected
     Procedure InternalCheckout; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inHash: String); ReIntroduce;
     Destructor Destroy; Override;
+    Procedure AddTag(Const inTag: String; Const inMessage: String);
     Procedure CherryPick;
     Procedure Clear;
+    Procedure RemoveTag(Const inTag: String);
     Procedure Revert(inRevertCommitMessage: String = '');
     Function Diff: String;
     Property Author: String Read GetAuthor;
     Property AuthorEmail: String Read GetAuthorEmail;
-    Property Branches: TArray<String> Read _branches Write _branches;
+    Property Branches: TArray<String> Read GetBranches;
     Property Committer: String Read GetCommitter;
     Property CommitterEmail: String Read GetCommitterEmail;
     Property DateTime: TDateTime Read GetDateTime;
@@ -66,12 +68,59 @@ Type
     Property Message: String Read GetMessage;
     Property ParentCommitHashes: TArray<String> Read GetParentCommitHashes;
     Property Summary: String Read GetSummary;
-    Property Tags: TArray<String> Read _tags Write _tags;
+    Property Tags: TArray<String> Read GetTags;
   End;
 
 Implementation
 
 Uses System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils, System.Generics.Collections;
+
+Procedure TAEGitCommit.AddTag(Const inTag, inMessage: String);
+Var
+  commitoid, tagoid: git_oid;
+  obj: Pgit_object;
+  signature: Pgit_signature;
+  found: Boolean;
+  s: String;
+Begin
+  found := False;
+
+  For s In Self.Tags Do
+    If s = inTag Then
+    Begin
+      found := True;
+
+      Break;
+    End;
+
+  If found Then
+    Exit;
+
+  Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@commitoid, PAnsiChar(UTF8String(_hash))));
+
+  Context.HandleLibGit2Output('git_object_lookup', git_object_lookup(@obj, Context.Repository, @commitoid, GIT_OBJECT_COMMIT));
+  Try
+    If inMessage.IsEmpty Then
+      Context.HandleLibGit2Output('git_tag_create_lightweight', git_tag_create_lightweight(@tagoid, Context.Repository, PAnsiChar(UTF8String(inTag)), obj, 0))
+    Else
+    Begin
+      Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
+      Try
+        Context.HandleLibGit2Output('git_tag_create', git_tag_create(@tagoid, Context.Repository, PAnsiChar(UTF8String(inTag)), obj, signature, PAnsiChar(UTF8String(inMessage)), 0));
+      Finally
+        git_signature_free(signature);
+
+        Context.DoLibGit2Call('git_signature_free');
+      End;
+    End;
+  Finally
+    git_object_free(obj);
+
+    Context.DoLibGit2Call('git_object_free');
+  End;
+
+  Context.ClearCommitDecorationCache;
+End;
 
 Procedure TAEGitCommit.CherryPick;
 Var
@@ -172,7 +221,6 @@ Begin
 
   _author := '';
   _authoremail := '';
-  _branches := [];
   _changedfilesloaded := False;
   _committer := '';
   _committeremail := '';
@@ -183,7 +231,6 @@ Begin
   _original_timestamp := 0;
   _parentcommithashes := [];
   _summary := '';
-  _tags := [];
 End;
 
 Constructor TAEGitCommit.Create(Const inContext: TAEGitRepositoryContext; Const inHash: String);
@@ -310,6 +357,11 @@ Begin
   Result := _summary;
 End;
 
+Function TAEGitCommit.GetTags: TArray<String>;
+Begin
+  Result := Context.CommitTags(_hash);
+End;
+
 Function TAEGitCommit.GetAuthor: String;
 Begin
   If Not _detailsloaded Then
@@ -324,6 +376,11 @@ Begin
     Self.LoadDetails;
 
   Result := _authoremail;
+End;
+
+Function TAEGitCommit.GetBranches: TArray<String>;
+Begin
+  Result := Context.CommitBranches(_hash);
 End;
 
 Function TAEGitCommit.GetFile(Const inGitPath: String): TAEGitCommitFile;
@@ -403,9 +460,6 @@ Begin
 
     Context.DoLibGit2Call('git_commit_free');
   End;
-
-  _branches := Context.CommitBranches(_hash);
-  _tags := Context.CommitTags(_hash);
 
   _detailsloaded := True;
 End;
@@ -524,6 +578,29 @@ Begin
   End;
 
   _changedfilesloaded := True;
+End;
+
+Procedure TAEGitCommit.RemoveTag(Const inTag: String);
+Var
+  s: String;
+  found: Boolean;
+Begin
+  found := False;
+
+  For s In Self.Tags Do
+    If s = inTag Then
+    Begin
+      found := True;
+
+      Break;
+    End;
+
+  If Not found Then
+    Exit;
+
+  Context.HandleLibGit2Output('git_tag_delete', git_tag_delete(Context.Repository, PAnsiChar(UTF8String(inTag))));
+
+  Context.ClearCommitDecorationCache;
 End;
 
 Procedure TAEGitCommit.Revert(inRevertCommitMessage: String = '');
