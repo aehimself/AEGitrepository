@@ -20,7 +20,7 @@ Type
   TAEGitStashes = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<Integer, TAEGitStash>;
-    _loaded: Boolean;
+    Procedure StashRefresh;
     Function GetCount: Integer;
     Function GetItem(Const inStashIndex: Integer): TAEGitStash;
   strict protected
@@ -59,8 +59,6 @@ End;
 Procedure TAEGitStashes.InternalClear;
 Begin
   _items.Clear;
-
-  _loaded := False;
 End;
 
 Constructor TAEGitStashes.Create(Const inContext: TAEGitRepositoryContext);
@@ -79,7 +77,7 @@ End;
 
 Function TAEGitStashes.GetItem(Const inStashIndex: Integer): TAEGitStash;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inStashIndex];
@@ -87,7 +85,7 @@ End;
 
 Function TAEGitStashes.GetCount: Integer;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items.Count;
@@ -109,8 +107,12 @@ Begin
 
   Context.RefreshWorkTree;
 
-  If _loaded Then
-    Self.Refresh;
+  Self.Refresh(False);
+End;
+
+Procedure TAEGitStashes.StashRefresh;
+Begin
+  Self.Refresh;
 End;
 
 Procedure TAEGitStashes.InternalRefresh;
@@ -120,7 +122,7 @@ Var
   idx: Integer;
   stash: TAEGitStash;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   list := TAEGitStashList.Create;
   Try
@@ -134,7 +136,7 @@ Begin
       Begin
         If Not _items.TryGetValue(idx, stash) Then
         Begin
-          stash := TAEGitStash.Create(Context, idx, list[idx], Refresh);
+          stash := TAEGitStash.Create(Context, idx, list[idx], StashRefresh);
 
           _items.Add(idx, stash);
         End
@@ -153,7 +155,7 @@ Begin
     FreeAndNil(list);
   End;
 
-  _loaded := True;
+  Self.Loaded := True;
 End;
 
 End.

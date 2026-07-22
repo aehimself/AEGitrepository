@@ -16,7 +16,6 @@ Type
   TAEGitSubmodules = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitSubmodule>;
-    _loaded: Boolean;
     Function GetCurrentCommit(Const inSubmodulePath: String): TAEGitSubmoduleCommit;
     Function GetCurrentVersion(Const inSubmodulePath: String): TAEGitSubmoduleCommit;
     Function GetItem(Const inSubmodulePath: String): TAEGitSubmodule;
@@ -88,15 +87,13 @@ End;
 Procedure TAEGitSubmodules.InternalClear;
 Begin
   _items.Clear;
-
-  _loaded := False;
 End;
 
 Procedure TAEGitSubmodules.InitializeAll(Const inOverwrite: Boolean = False);
 Var
   submodule: TAEGitSubmodule;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   For submodule In _items.Values Do
@@ -107,7 +104,7 @@ Procedure TAEGitSubmodules.UpdateAll(Const inInit: Boolean = True);
 Var
   submodule: TAEGitSubmodule;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   For submodule In _items.Values Do
@@ -126,7 +123,7 @@ End;
 
 Function TAEGitSubmodules.GetItem(Const inSubmodulePath: String): TAEGitSubmodule;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inSubmodulePath];
@@ -134,7 +131,7 @@ End;
 
 Function TAEGitSubmodules.GetPaths: TArray<String>;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items.Keys.ToArray;
@@ -150,7 +147,7 @@ Var
   submodule: TAEGitSubmodule;
   keystoremove: TList<String>;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   list := TList<String>.Create;
   Try
@@ -172,7 +169,7 @@ Begin
           _items.Add(path, submodule);
         End
         Else
-          submodule.Refresh;
+          submodule.Refresh(False);
 
         keystoremove.Remove(path);
       End;
@@ -186,7 +183,7 @@ Begin
     FreeAndNil(list);
   End;
 
-  _loaded := True;
+  Self.Loaded := True;
 End;
 
 End.

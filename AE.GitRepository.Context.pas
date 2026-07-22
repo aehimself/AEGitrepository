@@ -173,7 +173,7 @@ End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshBranches;
 Begin
-  (Self As TAEGitRepository).Branches.Refresh;
+  (Self As TAEGitRepository).Branches.Refresh(False);
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshCommitDecorationCache;
@@ -183,7 +183,7 @@ End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshWorkTree;
 Begin
-  (Self As TAEGitRepository).WorkTree.Refresh;
+  (Self As TAEGitRepository).WorkTree.Refresh(False);
 End;
 
 Procedure TAEGitRepositoryContextHelper.SplitBranchName(Var outBranchName: String; Var outRemote: String);

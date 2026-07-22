@@ -15,7 +15,6 @@ Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, AE.GitReposit
 Type
   TAEGitSubmodule = Class(TAEGitRepositoryRefreshableObject)
   strict private
-    _loaded: Boolean;
     _name: String;
     _path: String;
     _url: String;
@@ -85,7 +84,6 @@ End;
 
 Procedure TAEGitSubmodule.InternalClear;
 Begin
-  _loaded := False;
   _trackingbranch := '';
   _headhash := '';
   _indexhash := '';
@@ -105,7 +103,7 @@ Var
   oid: Pgit_oid;
   subrepo: Pgit_repository;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   Context.HandleLibGit2Output('git_submodule_lookup', git_submodule_lookup(@submodule, Context.Repository, PAnsiChar(UTF8String(_path))));
   Try
@@ -172,7 +170,7 @@ Begin
     Else
       _initialized := False;
 
-    _loaded := True;
+    Self.Loaded := True;
   Finally
     git_submodule_free(submodule);
 
@@ -257,7 +255,7 @@ End;
 
 Function TAEGitSubmodule.GetCurrentCommit: TAEGitSubmoduleCommit;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   If Not _commitsloaded Then
@@ -274,7 +272,7 @@ End;
 
 Function TAEGitSubmodule.GetTrackingBranch: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _trackingbranch;
@@ -282,7 +280,7 @@ End;
 
 Function TAEGitSubmodule.GetHeadHash: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _headhash;
@@ -290,7 +288,7 @@ End;
 
 Function TAEGitSubmodule.GetIndexHash: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _indexhash;
@@ -298,7 +296,7 @@ End;
 
 Function TAEGitSubmodule.GetInitialized: Boolean;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _initialized;
@@ -314,7 +312,7 @@ End;
 
 Function TAEGitSubmodule.GetName: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _name;
@@ -322,7 +320,7 @@ End;
 
 Function TAEGitSubmodule.GetPath: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _path;
@@ -330,7 +328,7 @@ End;
 
 Function TAEGitSubmodule.GetUrl: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _url;
@@ -346,7 +344,7 @@ End;
 
 Function TAEGitSubmodule.GetWorkDirHash: String;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.LoadDetails;
 
   Result := _workdirhash;

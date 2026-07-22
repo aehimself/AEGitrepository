@@ -464,8 +464,7 @@ Begin
   Begin
     Context.ClearCommitDecorationCache;
 
-    If _commits.Loaded Then
-      _commits.Refresh;
+    _commits.Refresh(False);
   End;
 End;
 

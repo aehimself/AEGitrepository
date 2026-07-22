@@ -16,7 +16,6 @@ Type
   TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
-    _loaded: Boolean;
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
@@ -54,8 +53,6 @@ End;
 Procedure TAEGitWorkTree.InternalClear;
 Begin
   _items.Clear;
-
-  _loaded := False;
 End;
 
 Procedure TAEGitWorkTree.Commit(Const inCommitMessage: String);
@@ -135,7 +132,7 @@ End;
 
 Function TAEGitWorkTree.GetFileNames: TArray<String>;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items.Keys.ToArray;
@@ -145,7 +142,7 @@ End;
 
 Function TAEGitWorkTree.GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inGitPath];
@@ -188,7 +185,7 @@ Var
   wtf: TAEGitWorkTreeFile;
   key: String;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   changedFiles := TAEGitChangedFileList.Create;
   Try
@@ -222,7 +219,7 @@ Begin
     FreeAndNil(changedFiles);
   End;
 
-  _loaded := True;
+  Self.Loaded := True;
 End;
 
 End.
