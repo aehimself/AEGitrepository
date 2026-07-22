@@ -18,7 +18,6 @@ Type
     _branchname: String;
     _items: TObjectDictionary<String, TAEGitCommit>;
     _lastheadhash: String;
-    _loaded: Boolean;
     _order: TList<String>;
     Function RefreshFastForward(Const inRef: String): Boolean;
     Procedure RefreshFullReconcile(Const inRef: String);
@@ -32,7 +31,6 @@ Type
     Destructor Destroy; Override;
     Property CommitHashes: TArray<String> Read GetCommitHashes;
     Property Items[Const inCommitHash: String]: TAEGitCommit Read GetItem; Default;
-    Property Loaded: Boolean Read _loaded;
   End;
 
 implementation
@@ -45,7 +43,6 @@ Begin
   _order.Clear;
 
   _lastheadhash := '';
-  _loaded := False;
 End;
 
 Constructor TAEGitBranchCommits.Create(Const inContext: TAEGitRepositoryContext; Const inBranchName: String);
@@ -68,7 +65,7 @@ End;
 
 Function TAEGitBranchCommits.GetItem(Const inCommitHash: String): TAEGitCommit;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inCommitHash];
@@ -76,7 +73,7 @@ End;
 
 Function TAEGitBranchCommits.GetCommitHashes: TArray<String>;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _order.ToArray;
@@ -186,7 +183,7 @@ Begin
       For hash In keystoremove Do
         _items.Remove(hash);
 
-      _loaded := True;
+      Self.Loaded := True;
     Finally
       git_revwalk_free(walk);
 
@@ -203,12 +200,12 @@ Var
   newheadoid, oldheadoid: git_oid;
   isfastforward: Boolean;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   If _branchname.Contains('/') Then
   Begin
     Self.Clear;
-    _loaded := True;
+    Self.Loaded := True;
 
     Exit;
   End;
@@ -222,7 +219,7 @@ Begin
     If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
     Begin
       Self.Clear;
-      _loaded := True;
+      Self.Loaded := True;
 
       Exit;
     End;
@@ -232,7 +229,7 @@ Begin
 
   If Not _lastheadhash.IsEmpty And (newheadhash = _lastheadhash) Then
   Begin
-    _loaded := True;
+    Self.Loaded := True;
 
     Exit;
   End;
@@ -252,7 +249,7 @@ Begin
   Context.ClearCommitDecorationCache;
 
   _lastheadhash := newheadhash;
-  _loaded := True;
+  Self.Loaded := True;
 End;
 
 End.

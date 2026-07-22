@@ -18,7 +18,6 @@ Type
     _current: TAEGitHeadTarget;
     _currentowned: Boolean;
     _items: TObjectDictionary<String, TAEGitBranch>;
-    _loaded: Boolean;
     _order: TList<String>;
     Procedure FreeCurrent;
     Function GetCurrent: TAEGitHeadTarget;
@@ -46,7 +45,6 @@ Begin
   Self.FreeCurrent;
 
   _items.Clear;
-  _loaded := False;
 End;
 
 Constructor TAEGitBranches.Create(Const inContext: TAEGitRepositoryContext);
@@ -117,7 +115,7 @@ End;
 
 Function TAEGitBranches.GetItem(Const inBranchName: String): TAEGitBranch;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inBranchName];
@@ -125,7 +123,7 @@ End;
 
 Function TAEGitBranches.GetNames: TArray<String>;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _order.ToArray;
@@ -145,7 +143,7 @@ Var
 Begin
   Self.FreeCurrent;
 
-  _loaded := False;
+  Self.Loaded := False;
   SetLength(names, 0);
 
   Context.HandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.Repository, GIT_BRANCH_ALL));
@@ -190,8 +188,8 @@ Begin
       End
       Else
       Begin
-        branch.Commits.Refresh;
-        branch.Submodules.Refresh;
+        branch.Commits.Refresh(False);
+        branch.Submodules.Refresh(False);
       End;
 
       _order.Add(name);
@@ -205,7 +203,7 @@ Begin
     FreeAndNil(keystoremove);
   End;
 
-  _loaded := True;
+  Self.Loaded := True;
 
   UpdateCurrent;
 End;
@@ -233,7 +231,7 @@ Begin
       Else
         name := '';
 
-      If Not _loaded Then
+      If Not Self.Loaded Then
         Self.Refresh;
 
       If _items.ContainsKey(name) Then

@@ -14,13 +14,16 @@ Uses AE.GitRepository.ContextedObject;
 
 Type
   TAEGitRepositoryRefreshableObject = Class(TAEGitRepositoryContextedObject)
+  strict private
+    _loaded: Boolean;
   strict protected
     Procedure InternalClear; Virtual; Abstract;
     Procedure InternalRefresh; Virtual; Abstract;
+    Property Loaded: Boolean Read _loaded Write _loaded;
   public
     Procedure AfterConstruction; Override;
     Procedure Clear;
-    Procedure Refresh;
+    Procedure Refresh(Const inForceLoading: Boolean = True);
   End;
 
 Implementation
@@ -35,11 +38,14 @@ End;
 Procedure TAEGitRepositoryRefreshableObject.Clear;
 Begin
   Self.InternalClear;
+
+  _loaded := False;
 End;
 
-Procedure TAEGitRepositoryRefreshableObject.Refresh;
+Procedure TAEGitRepositoryRefreshableObject.Refresh(Const inForceLoading: Boolean = True);
 Begin
-  Self.InternalRefresh;
+  If _loaded Or inForceLoading Then
+    Self.InternalRefresh;
 End;
 
 End.

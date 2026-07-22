@@ -19,7 +19,6 @@ Type
   strict private
     _index: Integer;
     _items: TObjectDictionary<String, TAEGitStashFile>;
-    _loaded: Boolean;
     _message: String;
     _onrefresh: TAEGitStashRefreshEvent;
     Function GetFileNames: TArray<String>;
@@ -46,8 +45,6 @@ Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Except
 Procedure TAEGitStash.InternalClear;
 Begin
   _items.Clear;
-
-  _loaded := false;
 End;
 
 Constructor TAEGitStash.Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String; Const inOnRefresh: TAEGitStashRefreshEvent = nil);
@@ -78,7 +75,7 @@ End;
 
 Function TAEGitStash.GetFile(Const inGitPath: String): TAEGitStashFile;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items[inGitPath];
@@ -86,7 +83,7 @@ End;
 
 Function TAEGitStash.GetFileNames: TArray<String>;
 Begin
-  If Not _loaded Then
+  If Not Self.Loaded Then
     Self.Refresh;
 
   Result := _items.Keys.ToArray;
@@ -213,7 +210,7 @@ Var
     End;
   End;
 Begin
-  _loaded := False;
+  Self.Loaded := False;
 
   changedfiles := TAEGitChangedFileList.Create;
   Try
@@ -383,7 +380,7 @@ Begin
     FreeAndNil(changedfiles);
   End;
 
-  _loaded := True;
+  Self.Loaded := True;
 End;
 
 End.
