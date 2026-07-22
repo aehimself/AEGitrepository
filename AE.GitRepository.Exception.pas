@@ -13,7 +13,9 @@ Interface
 Uses System.SysUtils, AE.GitRepository.TypeDef;
 
 Type
-  EAEGitException = Class(Exception)
+  EAEGitException = Class(Exception);
+
+  EAELibGitException = Class(EAEGitException)
   strict private
     _errorclass: TAEGitErrorClass;
     _errorcode: TAEGitErrorCode;
@@ -27,7 +29,7 @@ Type
 
 Implementation
 
-Constructor EAEGitException.Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: TAEGitErrorClass; Const inMessage: String);
+Constructor EAELibGitException.Create(Const inErrorCode: TAEGitErrorCode; Const inMethod: String; Const inErrorClass: TAEGitErrorClass; Const inMessage: String);
 Begin
   inherited Create(inMessage);
 

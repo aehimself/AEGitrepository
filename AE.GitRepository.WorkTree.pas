@@ -129,81 +129,8 @@ Begin
 End;
 
 Procedure TAEGitWorkTree.GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
-Var
-  statuslist: Pgit_status_list;
-  options: git_status_options;
-  count, b: Integer;
-  status: Pgit_status_entry;
 Begin
-  Context.HandleLibGit2Output('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
-
-  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS Or GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
-
-  Context.HandleLibGit2Output('git_status_list_new', git_status_list_new(@statuslist, Context.Repository, @options));
-  Try
-    count := git_status_list_entrycount(statuslist);
-
-    Context.DoLibGit2Call('git_status_list_entrycount');
-
-    For b := 0 To count - 1 Do
-    Begin
-      status := git_status_byindex(statuslist, b);
-
-      Context.DoLibGit2Call('git_status_byindex');
-
-      If status.status = GIT_STATUS_IGNORED Then
-        Continue;
-
-      If (status.status And GIT_STATUS_INDEX_NEW) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew);
-
-      If (status.status And GIT_STATUS_INDEX_MODIFIED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified);
-
-      If (status.status And GIT_STATUS_INDEX_DELETED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted);
-
-      If (status.status And GIT_STATUS_INDEX_RENAMED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed);
-
-      If (status.status And GIT_STATUS_INDEX_TYPECHANGE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange);
-
-      If (status.status And GIT_STATUS_WT_NEW) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew);
-
-      If (status.status And GIT_STATUS_WT_MODIFIED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified);
-
-      If (status.status And GIT_STATUS_WT_DELETED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted);
-
-      If (status.status And GIT_STATUS_WT_RENAMED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed);
-
-      If (status.status And GIT_STATUS_WT_TYPECHANGE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange);
-
-      If (status.status And GIT_STATUS_WT_UNREADABLE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable);
-
-      If (status.status And GIT_STATUS_CONFLICTED) <> 0 Then
-        If Assigned(status.index_to_workdir) Then
-          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted)
-        Else
-          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted);
-
-      If status.status = GIT_STATUS_CURRENT Then
-        If Assigned(status.index_to_workdir) Then
-          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent)
-        Else
-          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent);
-    End;
-  Finally
-    git_status_list_free(statuslist);
-
-    Context.DoLibGit2Call('git_status_list_free');
-  End;
+  Context.CollectChangedFiles(inChangedFiles, True);
 End;
 
 Function TAEGitWorkTree.GetFileNames: TArray<String>;
@@ -244,6 +171,8 @@ Begin
 
     Context.DoLibGit2Call('git_diff_free');
   End;
+
+  Context.RefreshWorkTree;
 End;
 
 Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
