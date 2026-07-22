@@ -594,7 +594,11 @@ Begin
           Context.DoLibGit2Call('git_reference_free');
         End
         Else
+        Begin
           Context.HandleLibGit2Output('git_branch_set_upstream', git_branch_set_upstream(localref, PAnsiChar(UTF8String(inRemote + '/' + _name))));
+
+          Context.ClearCommitDecorationCache;
+        End;
       Finally
         git_reference_free(localref);
 
