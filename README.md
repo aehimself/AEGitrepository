@@ -1,4 +1,4 @@
-# AEGitrepository
+# AEGitrepository Experimental
 
 TAEGitRepository is a wrapper class to perform basic functionality on local Git repositories with libgit2 in an easy way. You don't need Git to be installed, just build and ship git2.dll with your application and you are good to go!
 There are two external components you need to make use of TAEGitRepository.
@@ -12,20 +12,45 @@ There are two external components you need to make use of TAEGitRepository.
 I am NOT a C developer. Most of the code here was translated to Delphi from StackOverflow and other sources. They can misbehave, they can cease to function in your usage case. Use at your own risk.
 UNC repositories will probably fail to authenticate. Map them as drives to make them work.
 
+Experimental is the fully object-oriented version of the original TAEGitRepository superobject. It should be more intuitive and easier to use.
+
 ## In theory what is supported
+
+### General
+- Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
+- Event handler to log all executed calls to git2.dll and their results
+- Lazy loading in every object to minimize blocking calls
+### Branches
 - Rebasing a branch on any local/remote branch. Also includes aborting and continuing previous rebases.
-- Checking out an other branch, detecting actual branch name
+- Merging any local/remote branch into a local one. Also includes aborting and continuint previous rebases.
+- Checking out a branch or commit, keeping track of actually checked out object
 - Listing available local and remote branches
 - Get incoming (pull) / outgoing (push) commit count
-- Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
-- Commiting staged changes
-- Getting a list of files changed and their statuses
-- Fetch
-- Pusing local commits to remote, updating remote HEAD
+- Deleting a local branch
+- Fetching, including downloading all remote tags
 - Reverting last x commits (git reset --soft HEAD~x)
-- (Un)Staging a file for commit
-- Stash list, push, pop, drop
-- Event handler to log all executed calls to git2.dll and their results
+### Commits
+- Adding and removing tags, listing tags
+- Cherry-picking any commit into the current branch
+- Reverting a commit
+- Extracting full commit, or individual file diff
+### Work tree
+- Get the list of changed files
+- Getting full worktree patch or individual file diff
+- Applying a patch to the working tree
+- Commiting staged changes
+### Files in work tree
+- Revert changes
+- Stage / unstage
+- Get statuses (removed, changed, new, renamed, etc.)
+### Stash
+- Pushing work tree changes to stash
+- Popping / dropping a stash
+- Extracting full stash or individual file diff
+### Submodules
+- Listing available submodules
+- Initializing, syncing, updaitng
+- Get full submodule commit or individual file diff
 
 ## Usage:
 
@@ -41,16 +66,19 @@ begin
 
   repo.GitRepositoryDirectory := 'C:\gitrepos\gitrepo1';
 
-  repo.StageFile('modified.txt');
-  repo.CommitStagedFiles('New commit, yayy!');
+  For var branchname In repo.Branches.Names Do
+    WriteLn('Available branch: ' + branchname);
 
-  repo.Revert_Last_Commit(1);
-  repo.UnstageFile('modified.txt');
+  repo.WorkTree.Files['modified.txt'].Stage;
+  repo.WorkTree.Commit('New commit, yayy!');
 
-  repo.Stash_Push('Modified.txt is now in stash!');
-  repo.Stash_Pop(0);
+  (repo.Branches.Current As TAEGitBranch).Revert_Last_Commit(1);
+  repo.WorkTree.Files['modified.txt'].Unstage;
 
-  repo.RevertFileModifications('Modified.txt');
+  repo.Stashes.Push('Modified.txt is now in stash!');
+  repo.Stashes[0].Pop;
+
+  repo.WorkTree.Files['modified.txt'].Revert;
 
   [...]
 ```
