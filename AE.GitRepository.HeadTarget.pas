@@ -22,8 +22,12 @@ Type
 
 Implementation
 
+Uses AE.GitRepository.Context;
+
 Procedure TAEGitHeadTarget.Checkout;
 Begin
+  Context.AssertCleanWorkTree;
+
   InternalCheckout;
 End;
 

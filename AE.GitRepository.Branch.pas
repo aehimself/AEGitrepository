@@ -198,6 +198,8 @@ Var
   signature: Pgit_signature;
   parentcommits: Array[0..1] Of Pgit_commit;
 Begin
+  Context.AssertCleanWorkTree;
+
   If inMergeCommitMessage.IsEmpty Then
     inMergeCommitMessage := 'Merge branch "' + inMergeFromBranch + '"';
 
@@ -222,7 +224,7 @@ Begin
           Exit;
 
         If (preference And GIT_MERGE_PREFERENCE_FASTFORWARD_ONLY <> 0) And (analysis And GIT_MERGE_ANALYSIS_FASTFORWARD = 0) Then
-          Raise EAEGitException.Create(geConflict, 'git_merge_analysis_for_ref', ecRepository, 'Repository required fast-forward which isn''t available!');
+          Raise EAEGitException.Create('Repository required fast-forward which isn''t available!');
 
         // Fast-forward unless the repository explicitly requests not to
         If (analysis And GIT_MERGE_ANALYSIS_FASTFORWARD <> 0) And (preference And GIT_MERGE_PREFERENCE_NO_FASTFORWARD = 0) Then
@@ -355,6 +357,9 @@ Procedure TAEGitBranch.Delete;
 Var
   branch: Pgit_reference;
 Begin
+  If Context.GetCurrentBranchName = _name Then
+    Raise EAEGitException.Create('Cannot delete the currently checked out branch.');
+
   Context.HandleLibGit2Output('git_branch_lookup', git_branch_lookup(@branch, Context.Repository, PAnsiChar(UTF8String(_name)), GIT_BRANCH_LOCAL));
   Try
     Context.HandleLibGit2Output('git_branch_delete', git_branch_delete(branch));
@@ -476,7 +481,12 @@ Var
   utf8refs: TArray<UTF8String>;
 Begin
   If inRemote.IsEmpty Then
+  Begin
     inRemote := Context.GetDefaultRemoteName;
+
+    If inRemote.IsEmpty Then
+      Raise EAEGitException.Create('Cannot fetch: no remote is configured.');
+  End;
 
   Context.HandleLibGit2Output('git_remote_lookup', git_remote_lookup(@remote, Context.Repository, PAnsiChar(UTF8String(inRemote))));
   Try
@@ -562,7 +572,12 @@ Var
   localref, remoteref: Pgit_reference;
 Begin
   If inRemote.IsEmpty Then
+  Begin
     inRemote := Context.GetDefaultRemoteName;
+
+    If inRemote.IsEmpty Then
+      Raise EAEGitException.Create('Cannot push: no remote is configured.');
+  End;
 
   Context.HandleLibGit2Output('git_push_options_init', git_push_options_init(@options, GIT_PUSH_OPTIONS_VERSION));
 
@@ -631,7 +646,14 @@ Begin
     Context.SplitBranchName(inOnBranch, remote);
 
     If inOnBranch.IsEmpty Then
+    Begin
+      If remote.IsEmpty Then
+        Raise EAEGitException.Create('Cannot rebase: no remote is configured.');
+
       inOnBranch := remote + '/' + _name;
+    End;
+
+    Context.AssertCleanWorkTree;
 
     Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
     Try
@@ -652,7 +674,7 @@ Begin
                     Break;
 
                   If Not Context.SolveConflicts Then
-                    Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
+                    Raise EAEGitException.Create('Commit has conflicts, rebase aborted!');
 
                   Context.HandleLibGit2Output('git_rebase_commit', git_rebase_commit(@oid, rebase, nil, signature, nil, nil));
                 Until False;
@@ -697,6 +719,9 @@ Procedure TAEGitBranch.Revert_Last_Commit(Const inCommitCount: Integer);
 Var
   target: Pgit_object;
 Begin
+  If inCommitCount <= 0 Then
+    Raise EAEGitException.Create('Invalid commit count (' + inCommitCount.ToString + ')');
+
   Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@target, Context.Repository, PAnsiChar(AnsiString('HEAD~' + inCommitCount.ToString))));
   Try
     Context.HandleLibGit2Output('git_reset', git_reset(Context.Repository, target, GIT_RESET_SOFT, nil));
@@ -715,6 +740,9 @@ Var
   rebase: Pgit_rebase;
   signature: Pgit_signature;
 Begin
+  If Not Self.RebaseInProgress Then
+    Raise EAEGitException.Create('Cannot abort rebase: no rebase is in progress.');
+
   Try
     Context.HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
@@ -751,6 +779,9 @@ Var
   parents: Array[0..1] Of Pgit_commit;
   oid: Pgit_oid;
 Begin
+  If Not Self.MergeInProgress Then
+    Raise EAEGitException.Create('Cannot continue merge: no merge is in progress.');
+
   If inMergeCommitMessage.IsEmpty Then
     inMergeCommitMessage := 'Merge commit';
 
@@ -842,6 +873,9 @@ Var
   rebaseop: Pgit_rebase_operation;
   oid: git_oid;
 Begin
+  If Not Self.RebaseInProgress Then
+    Raise EAEGitException.Create('Cannot continue rebase: no rebase is in progress.');
+
   Try
     Context.HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
@@ -854,7 +888,7 @@ Begin
             Break;
 
           If Not Context.SolveConflicts Then
-            Raise EAEGitException.Create(geError, 'git_index_has_conflicts', ecRebase, 'Commit has conflicts, rebase aborted!');
+            Raise EAEGitException.Create('Commit has conflicts, rebase aborted!');
 
           Context.HandleLibGit2Output('git_rebase_commit', git_rebase_commit(@oid, rebase, nil, signature, nil, nil));
         Until False;

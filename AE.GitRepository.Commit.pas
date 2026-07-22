@@ -136,6 +136,8 @@ Begin
   If Not _detailsloaded Then
     Self.LoadDetails;
 
+  Context.AssertCleanWorkTree;
+
   Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
   Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @oid));
@@ -617,6 +619,8 @@ var
 Begin
   If inRevertCommitMessage.IsEmpty Then
     inRevertCommitMessage := 'Revert "' + _summary + '"';
+
+  Context.AssertCleanWorkTree;
 
   Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 

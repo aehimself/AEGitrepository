@@ -36,6 +36,7 @@ Type
     Procedure RefreshCommitDecoCache;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
+    Function CurrentBranchName: String;
     Function GetDefaultRemoteName: String;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean;
@@ -57,7 +58,7 @@ Type
 
 Implementation
 
-Uses System.SysUtils, AE.GitRepository.Exception,System.IOUtils, System.Generics.Collections;
+Uses System.SysUtils, AE.GitRepository.Exception,System.IOUtils, System.Generics.Collections, AE.GitRepository.Branch, AE.GitRepository.Commit;
 
 Function TAEGitRepository.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
 Var
@@ -231,7 +232,7 @@ Begin
         errorclass := ecUnknown;
     End;
 
-    Raise EAEGitException.Create(errorcode, inMethod, errorclass, String(UTF8String(err.message)));
+    Raise EAELibGitException.Create(errorcode, inMethod, errorclass, String(UTF8String(err.message)));
   End;
 End;
 
@@ -297,7 +298,7 @@ End;
 Procedure TAEGitRepository.CloseGitRepository;
 Begin
   If Not Assigned(_repo) Then
-    Raise EAEGitException.Create(geError, 'git_repository_free', ecInternal, 'The repository is not yet open!');
+    Raise EAEGitException.Create('The repository is not yet open!');
 
   git_repository_free(_repo);
 
@@ -563,6 +564,16 @@ Begin
   _repodir := '';
 End;
 
+Function TAEGitRepository.CurrentBranchName: String;
+Begin
+  If _branches.Current Is TAEGitBranch Then
+    Result := TAEGitBranch(_branches.Current).Name
+  Else If _branches.Current Is TAEGitCommit Then
+    Result := TAEGitCommit(_branches.Current).Hash
+  Else
+    Result := '';
+End;
+
 Destructor TAEGitRepository.Destroy;
 Begin
   FreeAndNil(_worktree);
@@ -612,7 +623,7 @@ End;
 Procedure TAEGitRepository.OpenGitRepository;
 Begin
   If Assigned(_repo) Then
-    Raise EAEGitException.Create(geUnknown, 'git_repository_open', ecInternal, 'A repository is already open!');
+    Raise EAEGitException.Create('A repository is already open!');
 
   HandleLibGit2Output('git_repository_open', git_repository_open(@_repo, PAnsiChar(UTF8String(_repodir))));
 End;
