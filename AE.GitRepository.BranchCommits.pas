@@ -20,8 +20,8 @@ Type
     _lastheadhash: String;
     _loaded: Boolean;
     _order: TList<String>;
-    Function RefreshFastForward: Boolean;
-    Procedure RefreshFullReconcile;
+    Function RefreshFastForward(Const inRef: String): Boolean;
+    Procedure RefreshFullReconcile(Const inRef: String);
     Function GetCommitHashes: TArray<String>;
     Function GetItem(Const inCommitHash: String): TAEGitCommit;
   strict protected
@@ -82,7 +82,7 @@ Begin
   Result := _order.ToArray;
 End;
 
-Function TAEGitBranchCommits.RefreshFastForward: Boolean;
+Function TAEGitBranchCommits.RefreshFastForward(Const inRef: String): Boolean;
 Var
   walk: Pgit_revwalk;
   oid: git_oid;
@@ -103,7 +103,7 @@ Begin
 
       Context.HandleLibGit2Output('git_revwalk_push_head', git_revwalk_push_head(walk));
 
-      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String('refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname))));
+      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
 
       While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
       Begin
@@ -147,7 +147,7 @@ Begin
   End;
 End;
 
-Procedure TAEGitBranchCommits.RefreshFullReconcile;
+Procedure TAEGitBranchCommits.RefreshFullReconcile(Const inRef: String);
 Var
   walk: Pgit_revwalk;
   oid: git_oid;
@@ -166,7 +166,7 @@ Begin
 
       Context.HandleLibGit2Output('git_revwalk_push_head', git_revwalk_push_head(walk));
 
-      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String('refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname))));
+      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
 
       While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
       Begin
@@ -217,10 +217,15 @@ Begin
 
   If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
   Begin
-    Self.Clear;
-    _loaded := True;
+    refname := 'refs/heads/' + _branchname;
 
-    Exit;
+    If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+    Begin
+      Self.Clear;
+      _loaded := True;
+
+      Exit;
+    End;
   End;
 
   newheadhash := Context.OidToString(@newheadoid);
@@ -241,8 +246,8 @@ Begin
     Context.DoLibGit2Call('git_graph_descendant_of');
   End;
 
-  If Not isfastforward Or Not Self.RefreshFastForward Then
-    Self.RefreshFullReconcile;
+  If Not isfastforward Or Not Self.RefreshFastForward(refname) Then
+    Self.RefreshFullReconcile(refname);
 
   Context.ClearCommitDecorationCache;
 
