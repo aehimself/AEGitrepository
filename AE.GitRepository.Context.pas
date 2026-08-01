@@ -22,7 +22,10 @@ Type
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure UpdateCurrentBranch;
     Procedure RefreshBranches;
+    Procedure RefreshActualCommitCount;
     Procedure RefreshCommitDecorationCache;
+    Procedure RefreshStashes;
+    Procedure RefreshSubmodules;
     Procedure RefreshWorkTree;
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
     Procedure CollectChangedFiles(Const inChangedFiles: TAEGitChangedFileList; Const inExcludeSubmodules: Boolean);
@@ -43,25 +46,26 @@ Type
 
 Implementation
 
-Uses System.SysUtils, System.Generics.Collections, AE.GitRepository, AE.GitRepository.Exception;
+Uses System.SysUtils, System.Generics.Collections, AE.GitRepository.Base, AE.GitRepository.Exception, AE.GitRepository.HeadTarget,
+     AE.GitRepository.Branch;
 
 Type
-  TAEGitRepositoryAccess = Class(TAEGitRepository)
+  TAEGitRepositoryBaseAccess = Class(TAEGitRepositoryBase)
   End;
 
 Function TAEGitRepositoryContextHelper.AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).AuthCallback(outGitCredential, inURL, inUserName, inAllowedTypes);
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).AuthCallback(outGitCredential, inURL, inUserName, inAllowedTypes);
 End;
 
 Function TAEGitRepositoryContextHelper.GetCurrentBranchName: String;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).CurrentBranchName;
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CurrentBranchName;
 End;
 
 Function TAEGitRepositoryContextHelper.GetDefaultRemoteName: String;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).GetDefaultRemoteName;
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).GetDefaultRemoteName;
 End;
 
 Function TAEGitRepositoryContextHelper.OidToString(Const inOid: Pgit_oid): String;
@@ -77,7 +81,7 @@ End;
 
 Function TAEGitRepositoryContextHelper.GetSettings: TAEGitRepositorySettings;
 Begin
-  Result := (Self As TAEGitRepository).Settings;
+  Result := (Self As TAEGitRepositoryBase).Settings;
 End;
 
 Function TAEGitRepositoryContextHelper.GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
@@ -119,76 +123,98 @@ End;
 
 Function TAEGitRepositoryContextHelper.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).HandleLibGit2Output(inMethod, inCommandResult, inRaiseException);
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).HandleLibGit2Output(inMethod, inCommandResult, inRaiseException);
 End;
 
 Function TAEGitRepositoryContextHelper.Repository: Pgit_repository;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).LibGit2Repository;
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).LibGit2Repository;
 End;
 
 Function TAEGitRepositoryContextHelper.SolveConflicts: Boolean;
 Begin
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).SolveConflicts;
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).SolveConflicts;
 End;
 
 Procedure TAEGitRepositoryContextHelper.ClearCommitDecorationCache;
 Begin
-  TAEGitRepositoryAccess(Self As TAEGitRepository).ClearCommitDecoCache;
+  TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).ClearCommitDecoCache;
 End;
 
 Function TAEGitRepositoryContextHelper.CommitBranches(Const inCommitHash: String): TArray<String>;
 Begin
-  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
-    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+  If Not TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.Loaded Then
+    TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshCommitDecoCache;
 
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.CommitBranches(inCommitHash);
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.CommitBranches(inCommitHash);
 End;
 
 Function TAEGitRepositoryContextHelper.CommitIsHead(Const inCommitHash: String): Boolean;
 Begin
-  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
-    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+  If Not TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.Loaded Then
+    TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshCommitDecoCache;
 
-  Result := inCommitHash = TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Head;
+  Result := inCommitHash = TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.Head;
 End;
 
 Function TAEGitRepositoryContextHelper.CommitTags(Const inCommitHash: String): TArray<String>;
 Begin
-  If Not TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.Loaded Then
-    TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+  If Not TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.Loaded Then
+    TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshCommitDecoCache;
 
-  Result := TAEGitRepositoryAccess(Self As TAEGitRepository).CommitDecoCache.CommitTags(inCommitHash);
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).CommitDecoCache.CommitTags(inCommitHash);
 End;
 
 Procedure TAEGitRepositoryContextHelper.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
-  TAEGitRepositoryAccess(Self As TAEGitRepository).DoLibGit2Call(inMethod, inErrorCode);
+  TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).DoLibGit2Call(inMethod, inErrorCode);
 End;
 
 Procedure TAEGitRepositoryContextHelper.UpdateCurrentBranch;
 Begin
-  (Self As TAEGitRepository).Branches.UpdateCurrent;
+  (Self As TAEGitRepositoryBase).Branches.UpdateCurrent;
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshActualCommitCount;
+Var
+  target: TAEGitHeadTarget;
+Begin
+  target := (Self As TAEGitRepositoryBase).Branches.Current;
+
+  If Not (target Is TAEGitBranch) Then
+    Exit;
+
+  TAEGitBranch(target).UpdateCommitCount;
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshBranches;
 Begin
-  (Self As TAEGitRepository).Branches.Refresh(False);
+  (Self As TAEGitRepositoryBase).Branches.Refresh(False);
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshCommitDecorationCache;
 Begin
-  TAEGitRepositoryAccess(Self As TAEGitRepository).RefreshCommitDecoCache;
+  TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshCommitDecoCache;
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshStashes;
+Begin
+  (Self As TAEGitRepositoryBase).Stashes.Refresh(False);
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshSubmodules;
+Begin
+  TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshSubmodules;
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshWorkTree;
 Begin
-  (Self As TAEGitRepository).WorkTree.Refresh(False);
+  (Self As TAEGitRepositoryBase).WorkTree.Refresh(False);
 End;
 
 Procedure TAEGitRepositoryContextHelper.SplitBranchName(Var outBranchName: String; Var outRemote: String);
 Begin
-  TAEGitRepositoryAccess(Self As TAEGitRepository).SplitBranchName(outBranchName, outRemote);
+  TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).SplitBranchName(outBranchName, outRemote);
 End;
 
 Procedure TAEGitRepositoryContextHelper.CollectChangedFiles(Const inChangedFiles: TAEGitChangedFileList; Const inExcludeSubmodules: Boolean);

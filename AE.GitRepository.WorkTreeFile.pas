@@ -63,6 +63,8 @@ Begin
   options.paths.strings := @pathstring;
 
   Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, nil, @options));
+
+  Context.RefreshWorkTree;
 End;
 
 Procedure TAEGitWorkTreeFile.SetStatus(Const inStatus: TArray<TAEGitFileStatus>);
@@ -94,6 +96,8 @@ Begin
       Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(Self.GitPath))));
 
     Context.HandleLibGit2Output('git_index_write', git_index_write(index));
+
+    Context.RefreshWorkTree;
   Finally
     git_index_free(index);
 
@@ -117,6 +121,8 @@ Begin
     pathspec.strings := @filename;
 
     Context.HandleLibGit2Output('git_reset_default', git_reset_default(Context.Repository, target, @pathspec));
+
+    Context.RefreshWorkTree;
   Finally
     git_object_free(target);
 

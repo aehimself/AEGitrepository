@@ -13,41 +13,76 @@ Interface
 Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, System.Generics.Collections, AE.GitRepository.StashFile;
 
 Type
-  TAEGitStashRefreshEvent = Procedure Of Object;
-
   TAEGitStash = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _index: Integer;
     _items: TObjectDictionary<String, TAEGitStashFile>;
     _message: String;
-    _onrefresh: TAEGitStashRefreshEvent;
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitStashFile;
   strict protected
     Procedure InternalClear; Override;
     Procedure InternalRefresh; Override;
   public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String; Const inOnRefresh: TAEGitStashRefreshEvent = nil); ReIntroduce; Virtual;
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Procedure Drop;
     Procedure Pop;
-    Function GetPatch(Const inFileNames: TArray<String>): String;
+    Function GetPatch(Const inFileNames: TArray<String> = []): String;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitStashFile Read GetFile;
     Property Index: Integer Read _index;
     Property Message: String Read _message Write _message;
   End;
 
+  TAEGitStashList = Class(TList<String>);
+
+  PAEGitStashList = ^TAEGitStashList;
+
+  TAEGitStashes = Class(TAEGitRepositoryRefreshableObject)
+  strict private
+    _items: TObjectDictionary<Integer, TAEGitStash>;
+    Function GetCount: Integer;
+    Function GetItem(Const inStashIndex: Integer): TAEGitStash;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
+  public
+    Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
+    Destructor Destroy; Override;
+    Procedure Push(Const inStashMessage: String);
+    Property Count: Integer Read GetCount;
+    Property Items[Const inStashIndex: Integer]: TAEGitStash Read GetItem; Default;
+  End;
+
 Implementation
 
 Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, AE.GitRepository.CommitFile, AE.GitRepository.ChangedFileList;
+
+//
+// libgit2 callbacks
+//
+
+Function LibGit2StashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
+Begin
+  If PAEGitStashList(Payload)^.Count <= Int64(Index) Then
+    PAEGitStashList(Payload)^.Count := Int64(Index) + 1;
+
+  PAEGitStashList(Payload)^[Int64(Index)] := String(UTF8String(MessageText));
+
+  Result := 0;
+End;
+
+//
+// TAEGitStash
+//
 
 Procedure TAEGitStash.InternalClear;
 Begin
   _items.Clear;
 End;
 
-Constructor TAEGitStash.Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String; Const inOnRefresh: TAEGitStashRefreshEvent = nil);
+Constructor TAEGitStash.Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String);
 Begin
   inherited Create(inContext);
 
@@ -55,7 +90,6 @@ Begin
 
   _index := inIndex;
   _message := inMessage;
-  _onrefresh := inOnRefresh;
 End;
 
 Destructor TAEGitStash.Destroy;
@@ -69,8 +103,7 @@ Procedure TAEGitStash.Drop;
 Begin
   Context.HandleLibGit2Output('git_stash_drop', git_stash_drop(Context.Repository, size_t(_index)));
 
-  If Assigned(_onrefresh) Then
-    _onrefresh;
+  Context.RefreshStashes;
 End;
 
 Function TAEGitStash.GetFile(Const inGitPath: String): TAEGitStashFile;
@@ -91,7 +124,7 @@ Begin
   TArray.Sort<String>(Result);
 End;
 
-Function TAEGitStash.GetPatch(Const inFileNames: TArray<String>): String;
+Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): String;
 var
   commit: Pgit_commit;
 begin
@@ -121,8 +154,7 @@ Begin
 
   Context.RefreshWorkTree;
 
-  If Assigned(_onrefresh) Then
-    _onrefresh;
+  Context.RefreshStashes;
 End;
 
 Procedure TAEGitStash.InternalRefresh;
@@ -378,6 +410,107 @@ Begin
     End;
   Finally
     FreeAndNil(changedfiles);
+  End;
+
+  Self.Loaded := True;
+End;
+
+//
+// TAEGitStashes
+//
+
+Procedure TAEGitStashes.InternalClear;
+Begin
+  _items.Clear;
+End;
+
+Constructor TAEGitStashes.Create(Const inContext: TAEGitRepositoryContext);
+Begin
+  inherited;
+
+  _items := TObjectDictionary<Integer, TAEGitStash>.Create([doOwnsValues]);
+End;
+
+Destructor TAEGitStashes.Destroy;
+Begin
+  FreeAndNil(_items);
+
+  inherited;
+End;
+
+Function TAEGitStashes.GetItem(Const inStashIndex: Integer): TAEGitStash;
+Begin
+  If Not Self.Loaded Then
+    Self.Refresh;
+
+  Result := _items[inStashIndex];
+End;
+
+Function TAEGitStashes.GetCount: Integer;
+Begin
+  If Not Self.Loaded Then
+    Self.Refresh;
+
+  Result := _items.Count;
+End;
+
+Procedure TAEGitStashes.Push(Const inStashMessage: String);
+Var
+  signature: Pgit_signature;
+  oid: git_oid;
+Begin
+  Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
+  Try
+    Context.HandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+  Finally
+    git_signature_free(signature);
+
+    Context.DoLibGit2Call('git_signature_free');
+  End;
+
+  Context.RefreshWorkTree;
+
+  Self.Refresh(False);
+End;
+
+Procedure TAEGitStashes.InternalRefresh;
+Var
+  list: TAEGitStashList;
+  keystoremove: TList<Integer>;
+  idx: Integer;
+  stash: TAEGitStash;
+Begin
+  Self.Loaded := False;
+
+  list := TAEGitStashList.Create;
+  Try
+    keystoremove := TList<Integer>.Create;
+    Try
+      Context.HandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.Repository, @LibGit2StashListCallback, @list));
+
+      keystoremove.AddRange(_items.Keys);
+
+      For idx := 0 To list.Count - 1 Do
+      Begin
+        If Not _items.TryGetValue(idx, stash) Then
+        Begin
+          stash := TAEGitStash.Create(Context, idx, list[idx]);
+
+          _items.Add(idx, stash);
+        End
+        Else
+          stash.Message := list[idx];
+
+        keystoremove.Remove(idx);
+      End;
+
+      For idx In keystoremove Do
+        _items.Remove(idx);
+    Finally
+      FreeAndNil(keystoremove);
+    End;
+  Finally
+    FreeAndNil(list);
   End;
 
   Self.Loaded := True;
