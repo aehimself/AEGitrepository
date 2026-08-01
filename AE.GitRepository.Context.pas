@@ -18,7 +18,9 @@ Type
 
   TAEGitRepositoryContextHelper = Class Helper For TAEGitRepositoryContext
   public
+    Procedure AssertCleanWorkTree;
     Procedure ClearCommitDecorationCache;
+    Procedure CollectChangedFiles(Const inChangedFiles: TAEGitChangedFileList; Const inExcludeSubmodules: Boolean);
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
     Procedure UpdateCurrentBranch;
     Procedure RefreshBranches;
@@ -27,9 +29,10 @@ Type
     Procedure RefreshStashes;
     Procedure RefreshSubmodules;
     Procedure RefreshWorkTree;
+    Procedure RevertFile(Const inFileName: String);
     Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
-    Procedure CollectChangedFiles(Const inChangedFiles: TAEGitChangedFileList; Const inExcludeSubmodules: Boolean);
-    Procedure AssertCleanWorkTree;
+    Procedure StageFile(Const inFileName: String);
+    Procedure UnstageFile(Const inFileName: String);
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
     Function CommitBranches(COnst inCommitHash: String): TArray<String>;
     Function CommitIsHead(Const inCommitHash: String): Boolean;
@@ -131,6 +134,11 @@ Begin
   Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).LibGit2Repository;
 End;
 
+Procedure TAEGitRepositoryContextHelper.RevertFile(Const inFileName: String);
+Begin
+  (Self As TAEGitRepositoryBase).WorkTree.RevertFiles([inFileName]);
+End;
+
 Function TAEGitRepositoryContextHelper.SolveConflicts: Boolean;
 Begin
   Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).SolveConflicts;
@@ -168,6 +176,11 @@ End;
 Procedure TAEGitRepositoryContextHelper.DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK);
 Begin
   TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).DoLibGit2Call(inMethod, inErrorCode);
+End;
+
+Procedure TAEGitRepositoryContextHelper.UnstageFile(Const inFileName: String);
+Begin
+  (Self As TAEGitRepositoryBase).WorkTree.UnstageFiles([inFileName]);
 End;
 
 Procedure TAEGitRepositoryContextHelper.UpdateCurrentBranch;
@@ -215,6 +228,11 @@ End;
 Procedure TAEGitRepositoryContextHelper.SplitBranchName(Var outBranchName: String; Var outRemote: String);
 Begin
   TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).SplitBranchName(outBranchName, outRemote);
+End;
+
+Procedure TAEGitRepositoryContextHelper.StageFile(Const inFileName: String);
+Begin
+  (Self As TAEGitRepositoryBase).WorkTree.StageFiles([inFileName]);
 End;
 
 Procedure TAEGitRepositoryContextHelper.CollectChangedFiles(Const inChangedFiles: TAEGitChangedFileList; Const inExcludeSubmodules: Boolean);

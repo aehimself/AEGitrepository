@@ -27,6 +27,9 @@ Type
     Destructor Destroy; Override;
     Procedure ApplyPatch(Const inPatch: String);
     Procedure Commit(Const inCommitMessage: String);
+    Procedure RevertFiles(Const inFileNames: TArray<String>);
+    Procedure StageFiles(Const inFileNames: TArray<String>);
+    Procedure UnstageFiles(Const inFileNames: TArray<String>);
     Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitWorkTreeFile Read GetFile;
@@ -183,7 +186,7 @@ End;
 
 Procedure TAEGitWorkTree.InternalRefresh;
 Var
-  changedFiles: TAEGitChangedFileList;
+  changedfiles: TAEGitChangedFileList;
   remove: TList<String>;
   pair: TPair<String, TArray<TAEGitFileStatus>>;
   wtf: TAEGitWorkTreeFile;
@@ -191,16 +194,16 @@ Var
 Begin
   Self.Loaded := False;
 
-  changedFiles := TAEGitChangedFileList.Create;
+  changedfiles := TAEGitChangedFileList.Create;
   Try
     remove := TList<String>.Create;
     Try
-      GetChangedFiles(changedFiles);
+      GetChangedFiles(changedfiles);
 
       For key In _items.Keys Do
         remove.Add(key);
 
-      For pair In changedFiles Do
+      For pair In changedfiles Do
       Begin
         If Not _items.TryGetValue(pair.Key, wtf) Then
         Begin
@@ -220,10 +223,106 @@ Begin
       FreeAndNil(remove);
     End;
   Finally
-    FreeAndNil(changedFiles);
+    FreeAndNil(changedfiles);
   End;
 
   Self.Loaded := True;
+End;
+
+Procedure TAEGitWorkTree.RevertFiles(Const inFileNames: TArray<String>);
+Var
+  options: git_checkout_options;
+  filenames: TArray<PAnsiChar>;
+  utffilenames: TArray<UTF8String>;
+  a: NativeInt;
+Begin
+  SetLength(filenames, Length(inFileNames));
+  SetLength(utffilenames, Length(inFileNames));
+
+  For a := Low(inFileNames) To High(inFileNames) Do
+  Begin
+    utffilenames[a] := UTF8String(inFileNames[a]);
+    filenames[a] := PAnsiChar(utffilenames[a]);
+  End;
+
+  Context.HandleLibGit2Output('git_checkout_options_init', git_checkout_options_init(@options, GIT_CHECKOUT_OPTIONS_VERSION));
+
+  options.checkout_strategy := GIT_CHECKOUT_FORCE Or GIT_CHECKOUT_REMOVE_UNTRACKED Or GIT_CHECKOUT_DISABLE_PATHSPEC_MATCH;
+  options.paths.count := Length(inFileNames);
+  options.paths.strings := @filenames[0];
+
+  Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, nil, @options));
+
+  Self.Refresh(False);
+End;
+
+Procedure TAEGitWorkTree.StageFiles(Const inFileNames: TArray<String>);
+Var
+  index: Pgit_index;
+  deleted: Boolean;
+  stat: TAEGitFileStatus;
+  filename: String;
+Begin
+  Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
+  Try
+    For filename In inFileNames Do
+    Begin
+      deleted := False;
+
+      For stat In _items[filename].Status Do
+        If stat = gfsDeleted Then
+        Begin
+          deleted := True;
+
+          Break;
+        End;
+
+      If deleted Then
+        Context.HandleLibGit2Output('git_index_remove_bypath', git_index_remove_bypath(index, PAnsiChar(UTF8String(filename))))
+      Else
+        Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, PAnsiChar(UTF8String(filename))));
+    End;
+
+    Context.HandleLibGit2Output('git_index_write', git_index_write(index));
+
+    Self.Refresh(False);
+  Finally
+    git_index_free(index);
+
+    Context.DoLibGit2Call('git_index_free');
+  End;
+End;
+
+Procedure TAEGitWorkTree.UnstageFiles(Const inFileNames: TArray<String>);
+Var
+  pathspec: git_strarray;
+  target: Pgit_object;
+  filenames: TArray<PAnsiChar>;
+  utffilenames: TArray<UTF8String>;
+  a: NativeInt;
+Begin
+  SetLength(filenames, Length(inFileNames));
+  SetLength(utffilenames, Length(inFileNames));
+
+  For a := Low(inFileNames) To High(inFileNames) Do
+  Begin
+    utffilenames[a] := UTF8String(inFileNames[a]);
+    filenames[a] := PAnsiChar(utffilenames[a]);
+  End;
+
+  Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@target, Context.Repository, 'HEAD'));
+  Try
+    pathspec.count := Length(inFileNames);;
+    pathspec.strings := @filenames[0];
+
+    Context.HandleLibGit2Output('git_reset_default', git_reset_default(Context.Repository, target, @pathspec));
+
+    Context.RefreshWorkTree;
+  Finally
+    git_object_free(target);
+
+    Context.DoLibGit2Call('git_object_free');
+  End;
 End;
 
 End.
