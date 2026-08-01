@@ -123,6 +123,10 @@ Begin
 
     Context.DoLibGit2Call('git_tree_free');
   End;
+
+  Self.Refresh(False);
+
+  Context.RefreshActualCommitCount;
 End;
 
 Procedure TAEGitWorkTree.GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);

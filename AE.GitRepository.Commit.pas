@@ -10,7 +10,8 @@ Unit AE.GitRepository.Commit;
 
 Interface
 
-Uses AE.GitRepository.Context, AE.GitRepository.HeadTarget, AE.GitRepository.CommitFile, libgit2;
+Uses AE.GitRepository.Context, AE.GitRepository.HeadTarget, AE.GitRepository.CommitFile, libgit2, AE.GitRepository.RefreshableObject,
+     System.Generics.Collections;
 
 Type
   TAEGitCommit = Class(TAEGitHeadTarget)
@@ -71,9 +72,33 @@ Type
     Property Tags: TArray<String> Read GetTags;
   End;
 
+  TAEGitCommits = Class(TAEGitRepositoryRefreshableObject)
+  strict private
+    _branchname: String;
+    _items: TObjectDictionary<String, TAEGitCommit>;
+    _lastheadhash: String;
+    _order: TList<String>;
+    Function RefreshFastForward(Const inRef: String): Boolean;
+    Procedure RefreshFullReconcile(Const inRef: String);
+    Function GetCommitHashes: TArray<String>;
+    Function GetItem(Const inCommitHash: String): TAEGitCommit;
+  strict protected
+    Procedure InternalClear; Override;
+    Procedure InternalRefresh; Override;
+  public
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inBranchName: String); ReIntroduce; Virtual;
+    Destructor Destroy; Override;
+    Property CommitHashes: TArray<String> Read GetCommitHashes;
+    Property Items[Const inCommitHash: String]: TAEGitCommit Read GetItem; Default;
+  End;
+
 Implementation
 
-Uses System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils, System.Generics.Collections;
+Uses System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils;
+
+//
+// TAEGitCommit
+//
 
 Procedure TAEGitCommit.AddTag(Const inTag, inMessage: String);
 Var
@@ -180,6 +205,8 @@ Begin
                   @parentcommit));
 
                 Context.HandleLibGit2Output('git_repository_state_cleanup', git_repository_state_cleanup(Context.Repository));
+
+                Context.RefreshSubmodules;
               Finally
                 git_signature_free(committer);
 
@@ -215,6 +242,9 @@ Begin
 
     Context.DoLibGit2Call('git_commit_free');
   End;
+
+  Context.RefreshBranches;
+  Context.RefreshActualCommitCount;
 End;
 
 Procedure TAEGitCommit.Clear;
@@ -664,6 +694,8 @@ Begin
                 @parents));
 
               Context.HandleLibGit2Output('git_repository_state_cleanup', git_repository_state_cleanup(Context.Repository));
+
+              Context.RefreshSubmodules;
             Finally
               git_signature_free(Signature);
 
@@ -692,6 +724,227 @@ Begin
   Finally
     git_commit_free(Commit);
   End;
+
+  Context.RefreshActualCommitCount;
+End;
+
+//
+// TAEGitCommits
+//
+
+Procedure TAEGitCommits.InternalClear;
+Begin
+  _items.Clear;
+  _order.Clear;
+
+  _lastheadhash := '';
+End;
+
+Constructor TAEGitCommits.Create(Const inContext: TAEGitRepositoryContext; Const inBranchName: String);
+Begin
+  inherited Create(inContext);
+
+  _items := TObjectDictionary<String, TAEGitCommit>.Create([doOwnsValues]);
+  _order := TList<String>.Create;
+
+  _branchname := inBranchName;
+End;
+
+Destructor TAEGitCommits.Destroy;
+Begin
+  FreeAndNil(_items);
+  FreeAndNil(_order);
+
+  inherited;
+End;
+
+Function TAEGitCommits.GetItem(Const inCommitHash: String): TAEGitCommit;
+Begin
+  If Not Self.Loaded Then
+    Self.Refresh;
+
+  Result := _items[inCommitHash];
+End;
+
+Function TAEGitCommits.GetCommitHashes: TArray<String>;
+Begin
+  If Not Self.Loaded Then
+    Self.Refresh;
+
+  Result := _order.ToArray;
+End;
+
+Function TAEGitCommits.RefreshFastForward(Const inRef: String): Boolean;
+Var
+  walk: Pgit_revwalk;
+  oid: git_oid;
+  hash: String;
+  commit: TAEGitCommit;
+  foundoldhead: Boolean;
+  newprefix: TList<String>;
+  i: Integer;
+Begin
+  Result := False;
+
+  foundoldhead := False;
+  newprefix := TList<String>.Create;
+  Try
+    Context.HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.Repository));
+    Try
+      Context.HandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+
+      Context.HandleLibGit2Output('git_revwalk_push_head', git_revwalk_push_head(walk));
+
+      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
+
+      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
+      Begin
+        hash := Context.OidToString(@oid);
+
+        If hash = _lastheadhash Then
+        Begin
+          foundoldhead := True;
+
+          Break;
+        End;
+
+        newprefix.Add(hash);
+      End;
+    Finally
+      git_revwalk_free(walk);
+
+      Context.DoLibGit2Call('git_revwalk_free');
+    End;
+
+    If Not foundoldhead Then
+      Exit;
+
+    For i := newprefix.Count - 1 DownTo 0 Do
+    Begin
+      hash := newprefix[i];
+
+      If Not _items.TryGetValue(hash, commit) Then
+      Begin
+        commit := TAEGitCommit.Create(Context, hash);
+
+        _items.Add(hash, commit);
+      End;
+
+      _order.Insert(0, hash);
+    End;
+
+    Result := True;
+  Finally
+    FreeAndNil(newprefix);
+  End;
+End;
+
+Procedure TAEGitCommits.RefreshFullReconcile(Const inRef: String);
+Var
+  walk: Pgit_revwalk;
+  oid: git_oid;
+  hash: String;
+  commit: TAEGitCommit;
+  keystoremove: TList<String>;
+Begin
+  keystoremove := TList<String>.Create;
+  Try
+    _order.Clear;
+    keystoremove.AddRange(_items.Keys);
+
+    Context.HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.Repository));
+    Try
+      Context.HandleLibGit2Output('git_revwalk_sorting', git_revwalk_sorting(walk, GIT_SORT_TOPOLOGICAL Or GIT_SORT_TIME));
+
+      Context.HandleLibGit2Output('git_revwalk_push_head', git_revwalk_push_head(walk));
+
+      Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
+
+      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
+      Begin
+        hash := Context.OidToString(@oid);
+
+        If Not _items.TryGetValue(hash, commit) Then
+        Begin
+          commit := TAEGitCommit.Create(Context, hash);
+
+          _items.Add(hash, commit);
+        End;
+
+        _order.Add(hash);
+        keystoremove.Remove(hash);
+      End;
+
+      For hash In keystoremove Do
+        _items.Remove(hash);
+
+      Self.Loaded := True;
+    Finally
+      git_revwalk_free(walk);
+
+      Context.DoLibGit2Call('git_revwalk_free');
+    End;
+  Finally
+    FreeAndNil(keystoremove);
+  End;
+End;
+
+Procedure TAEGitCommits.InternalRefresh;
+Var
+  refname, newheadhash: String;
+  newheadoid, oldheadoid: git_oid;
+  isfastforward: Boolean;
+Begin
+  Self.Loaded := False;
+
+  If _branchname.Contains('/') Then
+  Begin
+    Self.Clear;
+    Self.Loaded := True;
+
+    Exit;
+  End;
+
+  refname := 'refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname;
+
+  If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+  Begin
+    refname := 'refs/heads/' + _branchname;
+
+    If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+    Begin
+      Self.Clear;
+      Self.Loaded := True;
+
+      Exit;
+    End;
+  End;
+
+  newheadhash := Context.OidToString(@newheadoid);
+
+  If Not _lastheadhash.IsEmpty And (newheadhash = _lastheadhash) Then
+  Begin
+    Self.Loaded := True;
+
+    Exit;
+  End;
+
+  isfastforward := False;
+
+  If Not _lastheadhash.IsEmpty And Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oldheadoid, PAnsiChar(UTF8String(_lastheadhash))), False) Then
+  Begin
+    isfastforward := git_graph_descendant_of(Context.Repository, @newheadoid, @oldheadoid) = 1;
+
+    Context.DoLibGit2Call('git_graph_descendant_of');
+  End;
+
+  If Not isfastforward Or Not Self.RefreshFastForward(refname) Then
+    Self.RefreshFullReconcile(refname);
+
+  Context.ClearCommitDecorationCache;
+
+  _lastheadhash := newheadhash;
+  Self.Loaded := True;
 End;
 
 End.

@@ -28,7 +28,13 @@ Procedure TAEGitHeadTarget.Checkout;
 Begin
   Context.AssertCleanWorkTree;
 
-  InternalCheckout;
+  Try
+    InternalCheckout;
+
+    Context.RefreshSubmodules;
+  Finally
+    Context.RefreshWorkTree;
+  End;
 End;
 
 End.
