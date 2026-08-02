@@ -30,6 +30,7 @@ Type
   public
     Constructor Create; Override;
     Destructor Destroy; Override;
+    Procedure Clone(Const inRepository: String; Const inLocalFolder: String);
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
     Property OnBlockConflict: TAEGitBlockConflictCallback Read _onblockconflict Write _onblockconflict;
     Property OnLibGit2Call: TAELibGit2CallLogEvent Read _onlibgit2call Write _onlibgit2call;
@@ -39,7 +40,24 @@ Type
 
 Implementation
 
-Uses libgit2, System.SysUtils, AE.GitRepository.Exception, System.IOUtils;
+Uses libgit2, System.SysUtils, AE.GitRepository.Exception, System.IOUtils, AE.GitRepository.Libgit2Callbacks;
+
+Procedure TAEGitRepository.Clone(Const inRepository, inLocalFolder: String);
+Var
+  cloneoptions: git_clone_options;
+Begin
+  If Assigned(LibGit2Repository) Then
+    Self.CloseGitRepository;
+
+  git_clone_options_init(@cloneoptions, GIT_CLONE_OPTIONS_VERSION);
+
+  cloneoptions.fetch_opts.callbacks.payload := Self;
+  cloneoptions.fetch_opts.callbacks.credentials := LibGit2AuthCallback;
+
+  HandleLibGit2Output('git_clone', git_clone(@LibGit2Repository, PAnsiChar(UTF8String(inRepository)), PAnsiChar(UTF8String(inLocalFolder)), @cloneoptions));
+
+  _repodir := inLocalFolder;
+End;
 
 Procedure TAEGitRepository.CloseGitRepository;
 Begin
