@@ -891,9 +891,9 @@ End;
 
 Procedure TAEGitCommits.InternalRefresh;
 Var
-  refname, newheadhash: String;
-  newheadoid, oldheadoid: git_oid;
-  isfastforward: Boolean;
+  refname, newheadhash, localrefname, localheadhash: String;
+  newheadoid, localheadoid, oldheadoid: git_oid;
+  isfastforward,remotechanged, localchanged: Boolean;
 Begin
   Self.Loaded := False;
 
@@ -905,27 +905,29 @@ Begin
     Exit;
   End;
 
+  localrefname := 'refs/heads/' + _branchname;
+
+  Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@localheadoid, Context.Repository, PAnsiChar(UTF8String(localrefname))));
+
+  localheadhash := Context.OidToString(@localheadoid);
+
   refname := 'refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname;
 
-  If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+  If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+    newheadhash := Context.OidToString(@newheadoid)
+  Else
   Begin
-    refname := 'refs/heads/' + _branchname;
-
-    If Not Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
-    Begin
-      Self.Clear;
-      Self.Loaded := True;
-
-      Exit;
-    End;
+    refname := localrefname;
+    newheadoid := localheadoid;
+    newheadhash := localheadhash;
   End;
 
-  newheadhash := Context.OidToString(@newheadoid);
+  remotechanged := _lastheadhash.IsEmpty or (newheadhash <> _lastheadhash);
+  localchanged := _lastheadhash.IsEmpty or (localheadhash <> _lastheadhash);
 
-  If Not _lastheadhash.IsEmpty And (newheadhash = _lastheadhash) Then
+  If Not remotechanged And Not localchanged Then
   Begin
     Self.Loaded := True;
-
     Exit;
   End;
 
@@ -933,7 +935,7 @@ Begin
 
   If Not _lastheadhash.IsEmpty And Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oldheadoid, PAnsiChar(UTF8String(_lastheadhash))), False) Then
   Begin
-    isfastforward := git_graph_descendant_of(Context.Repository, @newheadoid, @oldheadoid) = 1;
+    isfastforward := git_graph_descendant_of(Context.Repository, @localheadoid, @oldheadoid) = 1;
 
     Context.DoLibGit2Call('git_graph_descendant_of');
   End;
@@ -943,7 +945,7 @@ Begin
 
   Context.ClearCommitDecorationCache;
 
-  _lastheadhash := newheadhash;
+  _lastheadhash := localheadhash;
   Self.Loaded := True;
 End;
 

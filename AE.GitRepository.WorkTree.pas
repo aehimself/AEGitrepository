@@ -129,7 +129,7 @@ Begin
 
   Self.Refresh(False);
 
-  Context.RefreshActualCommitCount;
+  Context.RefreshCurrentBranchCommits;
 End;
 
 Procedure TAEGitWorkTree.GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
@@ -254,6 +254,8 @@ Begin
   Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, nil, @options));
 
   Self.Refresh(False);
+
+  Context.RefreshCurrentBranchCommits;
 End;
 
 Procedure TAEGitWorkTree.StageFiles(Const inFileNames: TArray<String>);
