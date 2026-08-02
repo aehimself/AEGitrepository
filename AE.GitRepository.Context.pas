@@ -26,6 +26,7 @@ Type
     Procedure RefreshBranches;
     Procedure RefreshActualCommitCount;
     Procedure RefreshCommitDecorationCache;
+    Procedure RefreshCurrentBranchCommits;
     Procedure RefreshStashes;
     Procedure RefreshSubmodules;
     Procedure RefreshWorkTree;
@@ -208,6 +209,19 @@ End;
 Procedure TAEGitRepositoryContextHelper.RefreshCommitDecorationCache;
 Begin
   TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).RefreshCommitDecoCache;
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshCurrentBranchCommits;
+Var
+  target: TAEGitHeadTarget;
+Begin
+  target := (Self As TAEGitRepositoryBase).Branches.Current;
+
+  If Not (target Is TAEGitBranch) Then
+    Exit;
+
+  TAEGitBranch(target).Commits.Refresh(False);
+  TAEGitBranch(target).UpdateCommitCount;
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshStashes;
