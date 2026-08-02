@@ -78,43 +78,7 @@ Type
 
 Implementation
 
-Uses System.SysUtils, libgit2;
-
-Type
-  TAEGitSubmoduleListPayload = Record
-    List: TList<String>;
-    Context: TAEGitRepositoryContext;
-  End;
-
-  PAEGitSubmoduleListPayload = ^TAEGitSubmoduleListPayload;
-
-//
-// libgit2 callbacks
-//
-
-Function LibGit2SubmoduleListCallback(Submodule: Pgit_submodule; Const Name: PAnsiChar; Payload: Pointer): Integer; Cdecl;
-Var
-  path: String;
-  rawpath: PAnsiChar;
-  callbackpayload: PAEGitSubmoduleListPayload;
-Begin
-  Result := 0;
-  callbackpayload := PAEGitSubmoduleListPayload(Payload);
-
-  rawpath := git_submodule_path(Submodule);
-
-  callbackpayload^.Context.DoLibGit2Call('git_submodule_path');
-
-  If Assigned(rawpath) Then
-    path := String(UTF8String(rawpath))
-  Else If Assigned(Name) Then
-    path := String(UTF8String(Name))
-  Else
-    path := '';
-
-  If Not path.IsEmpty Then
-    callbackpayload^.List.Add(path);
-End;
+Uses System.SysUtils, libgit2, AE.GitRepository.Libgit2Callbacks;
 
 //
 // TAEGitSubmodules

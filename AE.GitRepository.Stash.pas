@@ -37,8 +37,6 @@ Type
 
   TAEGitStashList = Class(TList<String>);
 
-  PAEGitStashList = ^TAEGitStashList;
-
   TAEGitStashes = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<Integer, TAEGitStash>;
@@ -57,21 +55,7 @@ Type
 
 Implementation
 
-Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, AE.GitRepository.CommitFile, AE.GitRepository.ChangedFileList;
-
-//
-// libgit2 callbacks
-//
-
-Function LibGit2StashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
-Begin
-  If PAEGitStashList(Payload)^.Count <= Int64(Index) Then
-    PAEGitStashList(Payload)^.Count := Int64(Index) + 1;
-
-  PAEGitStashList(Payload)^[Int64(Index)] := String(UTF8String(MessageText));
-
-  Result := 0;
-End;
+Uses libgit2, System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, AE.GitRepository.CommitFile, AE.GitRepository.ChangedFileList, AE.GitRepository.Libgit2Callbacks;
 
 //
 // TAEGitStash

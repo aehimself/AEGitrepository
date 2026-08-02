@@ -69,41 +69,7 @@ Type
 
 Implementation
 
-Uses libgit2, System.SysUtils, AE.GitRepository.Exception, AE.GitRepository.TypeDef;
-
-//
-// libgit2 callbacks
-//
-
-Function LibGit2AuthCallback(out_: PPgit_credential; url, username_from_url: PAnsiChar; allowed_types: Cardinal; payload: Pointer): Integer; Cdecl;
-Var
-  types: TAEGitAuthTypes;
-Begin
-  types := [];
-
-  If (allowed_types And GIT_CREDENTIAL_USERPASS_PLAINTEXT_) <> 0 Then
-    Include(types, gaUserPassPlainText);
-
-  If (allowed_types And GIT_CREDENTIAL_SSH_KEY_) <> 0 Then
-    Include(types, gaSshKey);
-
-  If (allowed_types And GIT_CREDENTIAL_SSH_CUSTOM_) <> 0 Then
-    Include(types, gaSshCustom);
-
-  If (allowed_types And GIT_CREDENTIAL_DEFAULT_) <> 0 Then
-    Include(types, gaDefault);
-
-  If (allowed_types And GIT_CREDENTIAL_SSH_INTERACTIVE_) <> 0 Then
-    Include(types, gaSshInteractive);
-
-  If (allowed_types And GIT_CREDENTIAL_USERNAME_) <> 0 Then
-    Include(types, gaUsername);
-
-  If (allowed_types And GIT_CREDENTIAL_SSH_MEMORY) <> 0 Then
-    Include(types, gaSshMemory);
-
-  Result := TAEGitRepositoryContext(payload).AuthCallback(out_, url, username_from_url, types);
-End;
+Uses libgit2, System.SysUtils, AE.GitRepository.Exception, AE.GitRepository.TypeDef, AE.GitRepository.Libgit2Callbacks;
 
 //
 // TAEGitBranch
