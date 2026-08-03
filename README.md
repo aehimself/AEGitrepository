@@ -17,6 +17,7 @@ Experimental is the fully object-oriented version of the original TAEGitReposito
 ## In theory what is supported
 
 ### General
+- Cloning a remote repository
 - Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
 - Event handler to log all executed calls to git2.dll and their results
 - Lazy loading in every object to minimize blocking calls
