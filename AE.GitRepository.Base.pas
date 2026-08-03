@@ -42,6 +42,7 @@ Type
   public
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
+    Function RemoteURL(inRemote: String = ''): String;
     Property Branches: TAEGitBranches Read _branches;
     Property Settings: TAEGitRepositorySettings Read _settings;
     Property Stashes: TAEGitStashes Read _stashes;
@@ -507,6 +508,25 @@ End;
 Procedure TAEGitRepositoryBase.RefreshSubmodules;
 Begin
   // Submodule collection ownership is implemented in descendants.
+End;
+
+Function TAEGitRepositoryBase.RemoteURL(inRemote: String): String;
+Var
+  remote: Pgit_remote;
+Begin
+  If inRemote.IsEmpty Then
+    inRemote := GetDefaultRemoteName;
+
+  HandleLibGit2Output('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
+  Try
+    Result := String(UTF8String(git_remote_url(remote)));
+
+    DoLibGit2Call('git_remote_url');
+  Finally
+    git_remote_free(remote);
+
+    DoLibGit2Call('git_remote_free');
+  End;
 End;
 
 Procedure TAEGitRepositoryBase.ClearRepositoryObjects;

@@ -31,6 +31,10 @@ Begin
   Try
     InternalCheckout;
 
+    Context.UpdateCurrentBranch;
+
+    Context.RefreshActualCommitCount;
+
     Context.RefreshSubmodules;
   Finally
     Context.RefreshWorkTree;
