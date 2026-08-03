@@ -441,10 +441,16 @@ End;
 Procedure TAEGitSubmodule.Update(Const inInit: Boolean = True);
 Var
   submodule: Pgit_submodule;
+  options: git_submodule_update_options;
 Begin
+  _parentcontext.HandleLibGit2Output('git_submodule_update_options_init', git_submodule_update_options_init(@options, GIT_SUBMODULE_UPDATE_OPTIONS_VERSION));
+
+  options.fetch_opts.callbacks.payload := _parentcontext;
+  options.fetch_opts.callbacks.credentials := LibGit2AuthCallback;
+
   _parentcontext.HandleLibGit2Output('git_submodule_lookup', git_submodule_lookup(@submodule, _parentcontext.Repository, PAnsiChar(UTF8String(_path))));
   Try
-    _parentcontext.HandleLibGit2Output('git_submodule_update', git_submodule_update(submodule, Ord(inInit), nil));
+    _parentcontext.HandleLibGit2Output('git_submodule_update', git_submodule_update(submodule, Ord(inInit), @options));
   Finally
     git_submodule_free(submodule);
 

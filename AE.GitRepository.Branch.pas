@@ -170,8 +170,6 @@ Begin
   End;
 
   Context.HandleLibGit2Output('git_repository_set_head', git_repository_set_head(Context.Repository, PAnsiChar(UTF8String('refs/heads/' + branchname))));
-
-  Context.UpdateCurrentBranch;
 End;
 
 Procedure TAEGitBranch.Merge(Const inMergeFromBranch: String; inMergeCommitMessage: String = '');

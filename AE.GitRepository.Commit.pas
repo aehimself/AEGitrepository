@@ -305,8 +305,6 @@ Begin
   Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oid, PAnsiChar(UTF8String(_hash))));
 
   Context.HandleLibGit2Output('git_repository_set_head_detached', git_repository_set_head_detached(Context.Repository, @oid));
-
-  Context.UpdateCurrentBranch;
 End;
 
 Function TAEGitCommit.GetFileNames: TArray<String>;
