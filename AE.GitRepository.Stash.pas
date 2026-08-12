@@ -10,7 +10,8 @@ Unit AE.GitRepository.Stash;
 
 Interface
 
-Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, System.Generics.Collections, AE.GitRepository.StashFile;
+Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, System.Generics.Collections, AE.GitRepository.StashFile,
+     AE.GitRepository.Diff;
 
 Type
   TAEGitStash = Class(TAEGitRepositoryRefreshableObject)
@@ -18,6 +19,7 @@ Type
     _index: Integer;
     _items: TObjectDictionary<String, TAEGitStashFile>;
     _message: String;
+    _patch: TAEGitDiff;
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitStashFile;
   strict protected
@@ -28,7 +30,7 @@ Type
     Destructor Destroy; Override;
     Procedure Drop;
     Procedure Pop;
-    Function GetPatch(Const inFileNames: TArray<String> = []): String;
+    Function GetPatch(Const inFileNames: TArray<String> = []): TAEGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitStashFile Read GetFile;
     Property Index: Integer Read _index;
@@ -71,6 +73,7 @@ Begin
   inherited Create(inContext);
 
   _items := TObjectDictionary<String, TAEGitStashFile>.Create([doOwnsValues]);
+  _patch := TAEGitDiff.Create;
 
   _index := inIndex;
   _message := inMessage;
@@ -79,6 +82,7 @@ End;
 Destructor TAEGitStash.Destroy;
 Begin
   FreeAndNil(_items);
+  FreeAndNil(_patch);
 
   inherited;
 End;
@@ -108,15 +112,15 @@ Begin
   TArray.Sort<String>(Result);
 End;
 
-Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): String;
+Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): TAEGitDiff;
 var
   commit: Pgit_commit;
 begin
-  Result := '';
-
   commit := Context.GetStashCommit(_index);
   Try
-    Result := Self.GetPatchFromCommit(commit, inFileNames, Context.Repository);
+    _patch.AsString := Self.GetPatchFromCommit(commit, inFileNames, Context.Repository);
+
+    Result := _patch;
   Finally
     git_commit_free(commit);
 

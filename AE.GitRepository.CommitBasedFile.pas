@@ -18,8 +18,7 @@ Type
     Function GetStatus: TAEGitFileStatus;
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Virtual; Abstract;
-    Function InternalGetDiff(Const inRepository: Pgit_repository): String;
-    Function GetDiff: String; Override;
+    Function GetDiffString: String; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
     Property Status: TAEGitFileStatus Read GetStatus;
@@ -36,25 +35,20 @@ Begin
   Self.InternalStatus := [inStatus];
 End;
 
-Function TAEGitCommitBasedFile.InternalGetDiff(Const inRepository: Pgit_repository): String;
+Function TAEGitCommitBasedFile.GetDiffString: String;
 Var
   commit: Pgit_commit;
 Begin
   Result := '';
 
-  commit := Self.GetCommit(inRepository);
+  commit := Self.GetCommit(Context.Repository);
   Try
-    Result := Self.GetPatchFromCommit(commit, [Self.GitPath], inRepository);
+    Result := Self.GetPatchFromCommit(commit, [Self.GitPath], Context.Repository);
   Finally
     git_commit_free(commit);
 
     Context.DoLibGit2Call('git_commit_free');
   End;
-End;
-
-Function TAEGitCommitBasedFile.GetDiff: String;
-Begin
-  Result := Self.InternalGetDiff(Context.Repository);
 End;
 
 Function TAEGitCommitBasedFile.GetStatus: TAEGitFileStatus;
