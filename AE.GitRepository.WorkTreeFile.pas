@@ -10,36 +10,63 @@ Unit AE.GitRepository.WorkTreeFile;
 
 Interface
 
-Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Context;
+Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Context, AE.GitRepository.Diff;
 
 Type
   TAEGitWorkTreeFile = Class(TAEGitRepositoryFile)
   strict private
+    _stageddiff: TAEGitDiff;
     Procedure SetStatus(Const inStatus: TArray<TAEGitFileStatus>);
+    Function GetStagedDiff: TAEGitDiff;
     Function GetStatus: TArray<TAEGitFileStatus>;
   strict protected
-    Function GetDiff: String; Override;
-    Function GetStagedDiff: String;
+    Function GetDiff: TAEGitDiff; Override;
+    Function GetDiffString: String; Override;
   public
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String); Override;
+    Destructor Destroy; Override;
     Procedure Revert;
     Procedure Stage;
     Procedure Unstage;
-    Property StagedDiff: String Read GetStagedDiff;
+    Property StagedDiff: TAEGitDiff Read GetStagedDiff;
     Property Status: TArray<TAEGitFileStatus> Read GetStatus Write SetStatus;
   End;
 
 Implementation
 
-Uses libgit2;
+Uses libgit2, System.SysUtils;
 
-Function TAEGitWorkTreeFile.GetDiff: String;
+Function TAEGitWorkTreeFile.GetDiffString: String;
 Begin
   Result := Self.GetPatchFromWorkTree([Self.GitPath], False);
 End;
 
-Function TAEGitWorkTreeFile.GetStagedDiff: String;
+Constructor TAEGitWorkTreeFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String);
 Begin
-  Result := Self.GetPatchFromWorkTree([Self.GitPath], True);
+  inherited;
+
+  _stageddiff := TAEGitDiff.Create;
+End;
+
+Destructor TAEGitWorkTreeFile.Destroy;
+Begin
+  FreeAndNil(_stageddiff);
+
+  inherited;
+End;
+
+Function TAEGitWorkTreeFile.GetDiff: TAEGitDiff;
+Begin
+  Result := inherited;
+
+  Result.AsString := Self.GetDiffString;
+End;
+
+Function TAEGitWorkTreeFile.GetStagedDiff: TAEGitDiff;
+Begin
+  _stageddiff.AsString := Self.GetPatchFromWorkTree([Self.GitPath], True);
+
+  Result := _stageddiff;
 End;
 
 Function TAEGitWorkTreeFile.GetStatus: TArray<TAEGitFileStatus>;

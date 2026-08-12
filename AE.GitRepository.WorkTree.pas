@@ -10,12 +10,14 @@ Unit AE.GitRepository.WorkTree;
 
 Interface
 
-Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile, AE.GitRepository.Context, AE.GitRepository.ChangedFileList;
+Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile,
+     AE.GitRepository.Context, AE.GitRepository.ChangedFileList, AE.GitRepository.Diff;
 
 Type
   TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
+    _patch: TAEGitDiff;
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
@@ -30,7 +32,7 @@ Type
     Procedure RevertFiles(Const inFileNames: TArray<String>);
     Procedure StageFiles(Const inFileNames: TArray<String>);
     Procedure UnstageFiles(Const inFileNames: TArray<String>);
-    Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
+    Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitWorkTreeFile Read GetFile;
   End;
@@ -44,11 +46,13 @@ Begin
   inherited;
 
   _items := TObjectDictionary<String, TAEGitWorkTreeFile>.Create([doOwnsValues]);
+  _patch := TAEGitDiff.Create;
 End;
 
 Destructor TAEGitWorkTree.Destroy;
 Begin
   FreeAndNil(_items);
+  FreeAndNil(_patch);
 
   inherited;
 End;
@@ -179,9 +183,11 @@ Begin
   Context.RefreshWorkTree;
 End;
 
-Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
+Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEGitDiff;
 Begin
-  Result := Self.GetPatchFromWorkTree(inFileNames, inStagedOnly);
+  _patch.AsString := Self.GetPatchFromWorkTree(inFileNames, inStagedOnly);
+
+  Result := _patch;
 End;
 
 Procedure TAEGitWorkTree.InternalRefresh;

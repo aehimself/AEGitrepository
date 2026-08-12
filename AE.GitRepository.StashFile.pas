@@ -10,31 +10,44 @@ Unit AE.GitRepository.StashFile;
 
 Interface
 
-Uses AE.GitRepository.CommitBasedFile, AE.GitRepository.TypeDef, AE.GitRepository.Context, libgit2;
+Uses AE.GitRepository.CommitBasedFile, AE.GitRepository.TypeDef, AE.GitRepository.Context, libgit2, AE.GitRepository.Diff;
 
 Type
   TAEGitStashFile = Class(TAEGitCommitBasedFile)
   strict private
+    _stageddiff: TAEGitDiff;
     _stashindex: Integer;
+    Function GetStagedDiff: TAEGitDiff;
+    Function GetStatus: TArray<TAEGitFileStatus>;
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
-    Function GetDiff: String; Override;
-    Function GetStagedDiff: String;
-    Function GetStatus: TArray<TAEGitFileStatus>;
+    Function GetDiffString: String; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
+    Destructor Destroy; Override;
     Procedure UpdateStatus(Const inStatus: TArray<TAEGitFileStatus>);
-    Property StagedDiff: String Read GetStagedDiff;
+    Property StagedDiff: TAEGitDiff Read GetStagedDiff;
     Property Status: TArray<TAEGitFileStatus> Read GetStatus;
   End;
 
 Implementation
 
+Uses System.SysUtils;
+
 Constructor TAEGitStashFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus);
 Begin
   inherited Create(inContext, inGitPath, inStatus);
 
+  _stageddiff := TAEGitDiff.Create;
+
   _stashindex := inStashIndex;
+End;
+
+Destructor TAEGitStashFile.Destroy;
+Begin
+  FreeAndNil(_stageddiff);
+
+  inherited;
 End;
 
 Function TAEGitStashFile.GetCommit(Const inRepository: Pgit_repository): Pgit_commit;
@@ -47,7 +60,7 @@ Begin
   Result := Self.InternalStatus;
 End;
 
-Function TAEGitStashFile.GetDiff: String;
+Function TAEGitStashFile.GetDiffString: String;
 Var
   stat: TAEGitFileStatus;
   hasnew: Boolean;
@@ -138,12 +151,17 @@ Begin
   End;
 End;
 
-Function TAEGitStashFile.GetStagedDiff: String;
+Function TAEGitStashFile.GetStagedDiff: TAEGitDiff;
 Var
   stashcommit, parent0, parent1: Pgit_commit;
   parentTree0, parentTree1: Pgit_tree;
   parentcount: Cardinal;
 Begin
+  Result := _stageddiff;
+
+  If Not _stageddiff.AsString.IsEmpty Then
+    Exit;
+
   stashcommit := Context.GetStashCommit(_stashindex);
   Try
     parentcount := git_commit_parentcount(stashcommit);
@@ -152,7 +170,8 @@ Begin
 
     If parentcount < 2 Then
     Begin
-      Result := '';
+      _stageddiff.AsString := '';
+
       Exit;
     End;
 
@@ -164,7 +183,7 @@ Begin
         Try
           Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parentTree1, parent1));
           Try
-            Result := Self.GetPatchBetweenTrees(parentTree0, parentTree1, [Self.GitPath]);
+            _stageddiff.AsString := Self.GetPatchBetweenTrees(parentTree0, parentTree1, [Self.GitPath]);
           Finally
             git_tree_free(parentTree1);
 

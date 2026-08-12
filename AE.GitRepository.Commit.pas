@@ -11,7 +11,7 @@ Unit AE.GitRepository.Commit;
 Interface
 
 Uses AE.GitRepository.Context, AE.GitRepository.HeadTarget, AE.GitRepository.CommitFile, libgit2, AE.GitRepository.RefreshableObject,
-     System.Generics.Collections;
+     System.Generics.Collections, AE.GitRepository.Diff;
 
 Type
   TAEGitCommit = Class(TAEGitHeadTarget)
@@ -24,6 +24,7 @@ Type
     _committeremail: String;
     _datetime: TDateTime;
     _detailsloaded: Boolean;
+    _diff: TAEGitDiff;
     _hash: String;
     _message: String;
     _original_offset: Integer;
@@ -35,6 +36,7 @@ Type
     Function GetAuthor: String;
     Function GetAuthorEmail: String;
     Function GetBranches: TArray<String>;
+    Function GetDiff: TAEGitDiff;
     Function GetFileNames: TArray<String>;
     Function GetFile(Const inGitPath: String): TAEGitCommitFile;
     Function GetCommitter: String;
@@ -55,13 +57,13 @@ Type
     Procedure Clear;
     Procedure RemoveTag(Const inTag: String);
     Procedure Revert(inRevertCommitMessage: String = '');
-    Function Diff: String;
     Property Author: String Read GetAuthor;
     Property AuthorEmail: String Read GetAuthorEmail;
     Property Branches: TArray<String> Read GetBranches;
     Property Committer: String Read GetCommitter;
     Property CommitterEmail: String Read GetCommitterEmail;
     Property DateTime: TDateTime Read GetDateTime;
+    Property Diff: TAEGitDiff Read GetDiff;
     Property Hash: String Read _hash;
     Property Head: Boolean Read GetHead;
     Property FileNames: TArray<String> Read GetFileNames;
@@ -270,6 +272,7 @@ Begin
   inherited Create(inContext);
 
   _changedfiles := TAEGitCommitFileList.Create([doOwnsValues]);
+  _diff := TAEGitDiff.Create;
 
   _hash := inHash;
 
@@ -279,6 +282,7 @@ End;
 Destructor TAEGitCommit.Destroy;
 Begin
   FreeAndNil(_changedfiles);
+  FreeAndNil(_diff);
 
   inherited;
 End;
@@ -341,16 +345,21 @@ Begin
   Result := _datetime;
 End;
 
-Function TAEGitCommit.Diff: String;
+Function TAEGitCommit.GetDiff: TAEGitDiff;
 Var
   commit: Pgit_commit;
   commitoid: git_oid;
 Begin
+  Result := _diff;
+
+  If Not _diff.AsString.IsEmpty Then
+    Exit;
+
   Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@commitoid, PAnsiChar(UTF8String(_hash))));
 
   Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, @commitoid));
   Try
-    Result := Self.GetPatchFromCommit(commit, [], Context.Repository);
+    _diff.AsString := Self.GetPatchFromCommit(commit, [], Context.Repository);
   Finally
     git_commit_free(commit);
 
