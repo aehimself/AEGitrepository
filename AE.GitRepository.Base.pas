@@ -34,7 +34,7 @@ Type
     Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
     Function CurrentBranchName: String; Virtual;
     Function GetDefaultRemoteName: String; Virtual;
-    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean; Virtual;
     Function SolveConflicts: Boolean; Virtual;
     Property CommitDecoCache: TAEGitCommitDecorationCache Read GetCommitDecorationCache;
@@ -53,7 +53,7 @@ Implementation
 
 Uses System.SysUtils, System.IOUtils, AE.GitRepository.Exception, System.Generics.Collections, AE.GitRepository.Commit;
 
-Function TAEGitRepositoryBase.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+Function TAEGitRepositoryBase.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
 Var
   err: PGit_Error;
   errorcode: TAEGitErrorCode;
@@ -138,7 +138,7 @@ Begin
 
   Result := errorcode = geOK;
 
-  If Not Result And inRaiseException Then
+  If Not Result And Not (errorcode In inAcceptableErrorCodes) Then
   Begin
     err := git_error_last;
 
@@ -311,7 +311,7 @@ Var
       Exit(True);
     End;
 
-    If HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), False) Then
+    If HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, inRef, GIT_OBJECT_COMMIT), [gePeel]) Then
     Try
       oid := git_object_id(obj);
 
@@ -334,7 +334,7 @@ Begin
 
   HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/tags/*'))));
   Try
-    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), [geIterationOver]) Do
     Try
       HandleLibGit2Output('git_reference_peel', git_reference_peel(@obj, ref, GIT_OBJECT_COMMIT));
       Try
@@ -365,7 +365,7 @@ Begin
 
   HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/heads/*'))));
   Try
-    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), [geIterationOver]) Do
     Begin
       Try
         If TryGetCommitHashFromReference(ref, hash) Then
@@ -390,7 +390,7 @@ Begin
 
   HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@iterator, _repo, PAnsiChar(UTF8String('refs/remotes/*'))));
   Try
-    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), False) Do
+    While HandleLibGit2Output('git_reference_next', git_reference_next(@ref, iterator), [geIterationOver]) Do
     Begin
       Try
         If TryGetCommitHashFromReference(ref, hash) Then
@@ -413,7 +413,7 @@ Begin
     DoLibGit2Call('git_reference_iterator_free');
   End;
 
-  If HandleLibGit2Output('git_repository_head', git_repository_head(@headref, _repo), False) Then
+  If HandleLibGit2Output('git_repository_head', git_repository_head(@headref, _repo), [geUnbornBranch]) Then
   Try
     If TryGetCommitHashFromReference(headref, hash) Then
       _commitdecorationcache.Head := hash;
@@ -563,7 +563,7 @@ Begin
 
     HandleLibGit2Output('git_index_conflict_iterator_new', git_index_conflict_iterator_new(@iterator, index));
     Try
-      While HandleLibGit2Output('git_index_conflict_next', git_index_conflict_next(@ancestor, @ours, @theirs, iterator), False) Do
+      While HandleLibGit2Output('git_index_conflict_next', git_index_conflict_next(@ancestor, @ours, @theirs, iterator), [geIterationOver]) Do
       Begin
         HandleLibGit2Output('git_merge_file_from_index', git_merge_file_from_index(@mergeresult, _repo, ancestor, ours, theirs, nil));
         Try

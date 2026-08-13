@@ -42,7 +42,7 @@ Type
     Function GetDefaultRemoteName: String;
     Function GetSettings: TAEGitRepositorySettings;
     Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
-    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+    Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
     Function OidToString(Const inOid: Pgit_oid): String;
     Function Repository: Pgit_repository;
     Function SolveConflicts: Boolean;
@@ -125,9 +125,9 @@ begin
   End;
 End;
 
-Function TAEGitRepositoryContextHelper.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inRaiseException: Boolean = True): Boolean;
+Function TAEGitRepositoryContextHelper.HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
 Begin
-  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).HandleLibGit2Output(inMethod, inCommandResult, inRaiseException);
+  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).HandleLibGit2Output(inMethod, inCommandResult, inAcceptableErrorCodes);
 End;
 
 Function TAEGitRepositoryContextHelper.Repository: Pgit_repository;

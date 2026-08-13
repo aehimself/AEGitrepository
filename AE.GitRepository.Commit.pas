@@ -804,7 +804,7 @@ Begin
 
       Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
 
-      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
+      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), [geIterationOver]) Do
       Begin
         hash := Context.OidToString(@oid);
 
@@ -867,7 +867,7 @@ Begin
 
       Context.HandleLibGit2Output('git_revwalk_push_ref', git_revwalk_push_ref(walk, PAnsiChar(UTF8String(inRef))));
 
-      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), False) Do
+      While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@oid, walk), [geIterationOver]) Do
       Begin
         hash := Context.OidToString(@oid);
 
@@ -920,7 +920,7 @@ Begin
 
   refname := 'refs/remotes/' + Context.GetDefaultRemoteName + '/' + _branchname;
 
-  If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), False) Then
+  If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@newheadoid, Context.Repository, PAnsiChar(UTF8String(refname))), [geNotFound]) Then
     newheadhash := Context.OidToString(@newheadoid)
   Else
   Begin
@@ -940,7 +940,7 @@ Begin
 
   isfastforward := False;
 
-  If Not _lastheadhash.IsEmpty And Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oldheadoid, PAnsiChar(UTF8String(_lastheadhash))), False) Then
+  If Not _lastheadhash.IsEmpty And Context.HandleLibGit2Output('git_oid_fromstr', git_oid_fromstr(@oldheadoid, PAnsiChar(UTF8String(_lastheadhash))), [geInvalid]) Then
   Begin
     isfastforward := git_graph_descendant_of(Context.Repository, @localheadoid, @oldheadoid) = 1;
 

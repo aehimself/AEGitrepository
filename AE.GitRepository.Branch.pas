@@ -131,7 +131,7 @@ Begin
 
   options.checkout_strategy := GIT_CHECKOUT_SAFE;
 
-  If Not Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, Context.Repository, PAnsiChar(UTF8String('refs/heads/' + branchname))), False) Then
+  If Not Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@obj, Context.Repository, PAnsiChar(UTF8String('refs/heads/' + branchname))), [geNotFound]) Then
   Begin
     Context.HandleLibGit2Output('git_reference_lookup', git_reference_lookup(@remotebranch, Context.Repository, PAnsiChar(UTF8String('refs/remotes/' + remote + '/' + branchname))));
     Try
@@ -407,13 +407,13 @@ Begin
 
   Context.HandleLibGit2Output('git_repository_head', git_repository_head(@headref, Context.Repository));
   Try
-    If Context.HandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, headref), False) Then
+    If Context.HandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, headref), [geNotFound]) Then
     Try
       remotename := git_reference_name(remoteref);
 
       Context.DoLibGit2Call('git_reference_name');
 
-      If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, Context.Repository, remotename), False) Then
+      If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@remoteoid, Context.Repository, remotename), [geNotFound]) Then
       Begin
         Context.HandleLibGit2Output('git_graph_ahead_behind', git_graph_ahead_behind(@ahead, @behind, Context.Repository, @localoid, @remoteoid));
 
@@ -436,7 +436,7 @@ Begin
 
         Context.HandleLibGit2Output('git_reference_iterator_glob_new', git_reference_iterator_glob_new(@refiterator, Context.Repository, PAnsiChar(UTF8String('refs/remotes/' + inRemote + '/*'))));
         Try
-          While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, refiterator), False) Do
+          While Context.HandleLibGit2Output('git_reference_next', git_reference_next(@ref, refiterator), [geIterationOver]) Do
           Begin
             Try
               a := git_reference_type(ref);
@@ -463,7 +463,7 @@ Begin
           Context.DoLibGit2Call('git_reference_iterator_free');
         End;
 
-        While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@walkoid, walk), False) Do
+        While Context.HandleLibGit2Output('git_revwalk_next', git_revwalk_next(@walkoid, walk), [geIterationOver]) Do
           Inc(_outgoingcommits);
       Finally
         git_revwalk_free(walk);
@@ -618,7 +618,7 @@ Begin
 
       Context.HandleLibGit2Output('git_reference_lookup', git_reference_lookup(@localref, Context.Repository, PAnsiChar(UTF8String('refs/heads/' + _name))));
       Try
-        If Context.HandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, localref), False) Then
+        If Context.HandleLibGit2Output('git_branch_upstream', git_branch_upstream(@remoteref, localref), [geNotFound]) Then
         Begin
           git_reference_free(remoteref);
 
@@ -688,7 +688,7 @@ Begin
               Context.HandleLibGit2Output('git_rebase_init', git_rebase_init(@rebase, Context.Repository, branch, nil, onto, @options));
               Try
                 Repeat
-                  If Not Context.HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, rebase), False) Then
+                  If Not Context.HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, rebase), [geIterationOver]) Then
                     Break;
 
                   If Not Context.SolveConflicts Then
@@ -920,7 +920,7 @@ Begin
       Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
       Try
         Repeat
-          If Not Context.HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, rebase), False) Then
+          If Not Context.HandleLibGit2Output('git_rebase_next', git_rebase_next(@rebaseop, rebase), [geIterationOver]) Then
             Break;
 
           If Not Context.SolveConflicts Then
@@ -956,7 +956,7 @@ Var
 Begin
   Context.HandleLibGit2Output('git_rebase_options_init', git_rebase_options_init(@options, GIT_REBASE_OPTIONS_VERSION));
 
-  Result := Context.HandleLibGit2Output('git_rebase_open', git_rebase_open(@rebase, Context.Repository, @options), False);
+  Result := Context.HandleLibGit2Output('git_rebase_open', git_rebase_open(@rebase, Context.Repository, @options), [geNotFound]);
 
   If Result Then
   Begin
@@ -1079,11 +1079,11 @@ Begin
   Context.HandleLibGit2Output('git_branch_iterator_new', git_branch_iterator_new(@iterator, Context.Repository, GIT_BRANCH_ALL));
   Try
     Repeat
-      If Not Context.HandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), False) Then
+      If Not Context.HandleLibGit2Output('git_branch_next', git_branch_next(@ref, @branchtypeoutput, iterator), [geIterationOver]) Then
         Break;
 
       Try
-        If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
+        If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), [geNotFound]) Then
         Begin
           idx := Length(names);
           SetLength(names, idx + 1);
@@ -1145,7 +1145,7 @@ Var
 Begin
   Self.FreeCurrent;
 
-  If Context.HandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.Repository), False) Then
+  If Context.HandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.Repository), [geUnbornBranch]) Then
   Try
     isBranch := git_reference_is_branch(ref);
 
@@ -1153,7 +1153,7 @@ Begin
 
     If isBranch <> 0 Then
     Begin
-      If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), False) Then
+      If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), [geNotFound]) Then
         name := String(UTF8String(branchname))
       Else
         name := '';
