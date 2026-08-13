@@ -1069,7 +1069,7 @@ Var
   iterator: Pgit_branch_iterator;
   branchtypeoutput: git_branch_t;
   branchname: PAnsiChar;
-  idx: Integer;
+  a: Integer;
 Begin
   Self.FreeCurrent;
 
@@ -1085,10 +1085,10 @@ Begin
       Try
         If Context.HandleLibGit2Output('git_branch_name', git_branch_name(@branchname, ref), [geNotFound]) Then
         Begin
-          idx := Length(names);
-          SetLength(names, idx + 1);
+          a := Length(names);
+          SetLength(names, a + 1);
 
-          names[idx] := String(UTF8String(branchname));
+          names[a] := String(UTF8String(branchname));
         End;
       Finally
         git_reference_free(ref);

@@ -10,16 +10,28 @@ Type
     Context: TAEGitRepositoryContext;
   End;
 
+  TAEGitStashListEntry = Record
+    Hash: String;
+    MessageText: String;
+  End;
+
+  TAEGitStashList = Class(TList<TAEGitStashListEntry>);
+
+  TAEGitStashListPayload = Record
+    List: TAEGitStashList;
+    Context: TAEGitRepositoryContext;
+  End;
+
 Function LibGit2AuthCallback(out_: PPgit_credential; url, username_from_url: PAnsiChar; allowed_types: Cardinal; payload: Pointer): Integer; Cdecl;
 Function LibGit2StashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
 Function LibGit2SubmoduleListCallback(Submodule: Pgit_submodule; Const Name: PAnsiChar; Payload: Pointer): Integer; Cdecl;
 
 Implementation
 
-Uses AE.GitREpository.TypeDef, AE.GitRepository.Stash, AE.GitRepository.SubModule, System.SysUtils;
+Uses AE.GitRepository.TypeDef, AE.GitRepository.SubModule, System.SysUtils;
 
 Type
-  PAEGitStashList = ^TAEGitStashList;
+  PAEGitStashListPayload = ^TAEGitStashListPayload;
   PAEGitSubmoduleListPayload = ^TAEGitSubmoduleListPayload;
 
 Function LibGit2AuthCallback(out_: PPgit_credential; url, username_from_url: PAnsiChar; allowed_types: Cardinal; payload: Pointer): Integer; Cdecl;
@@ -53,11 +65,19 @@ Begin
 End;
 
 Function LibGit2StashListCallback(Index: NativeUInt; Const MessageText: PAnsiChar; Const StashId: Pgit_oid; Payload: Pointer): Integer; Cdecl;
+Var
+  callbackpayload: PAEGitStashListPayload;
+  entry: TAEGitStashListEntry;
 Begin
-  If PAEGitStashList(Payload)^.Count <= Int64(Index) Then
-    PAEGitStashList(Payload)^.Count := Int64(Index) + 1;
+  callbackpayload := PAEGitStashListPayload(Payload);
 
-  PAEGitStashList(Payload)^[Int64(Index)] := String(UTF8String(MessageText));
+  entry.Hash := callbackpayload^.Context.OidToString(StashId);
+  entry.MessageText := String(UTF8String(MessageText));
+
+  If callbackpayload^.List.Count <= Int64(Index) Then
+    callbackpayload^.List.Count := Int64(Index) + 1;
+
+  callbackpayload^.List[Int64(Index)] := entry;
 
   Result := 0;
 End;
@@ -66,14 +86,14 @@ Function LibGit2SubmoduleListCallback(Submodule: Pgit_submodule; Const Name: PAn
 Var
   path: String;
   rawpath: PAnsiChar;
-  callbackpayload: PAEGitSubmoduleListPayload;
+  callbackpayload: TAEGitSubmoduleListPayload;
 Begin
   Result := 0;
-  callbackpayload := PAEGitSubmoduleListPayload(Payload);
+  callbackpayload := PAEGitSubmoduleListPayload(Payload)^;
 
   rawpath := git_submodule_path(Submodule);
 
-  callbackpayload^.Context.DoLibGit2Call('git_submodule_path');
+  callbackpayload.Context.DoLibGit2Call('git_submodule_path');
 
   If Assigned(rawpath) Then
     path := String(UTF8String(rawpath))
@@ -83,7 +103,7 @@ Begin
     path := '';
 
   If Not path.IsEmpty Then
-    callbackpayload^.List.Add(path);
+    callbackpayload.List.Add(path);
 End;
 
 End.

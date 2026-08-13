@@ -16,14 +16,14 @@ Type
   TAEGitStashFile = Class(TAEGitCommitBasedFile)
   strict private
     _stageddiff: TAEGitDiff;
-    _stashindex: Integer;
+    _stashhash: String;
     Function GetStagedDiff: TAEGitDiff;
     Function GetStatus: TArray<TAEGitFileStatus>;
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
     Function GetDiffString: String; Override;
   public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashHash: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Procedure UpdateStatus(Const inStatus: TArray<TAEGitFileStatus>);
     Property StagedDiff: TAEGitDiff Read GetStagedDiff;
@@ -34,13 +34,13 @@ Implementation
 
 Uses System.SysUtils;
 
-Constructor TAEGitStashFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashIndex: Integer; Const inStatus: TAEGitFileStatus);
+Constructor TAEGitStashFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashHash: String; Const inStatus: TAEGitFileStatus);
 Begin
   inherited Create(inContext, inGitPath, inStatus);
 
   _stageddiff := TAEGitDiff.Create;
 
-  _stashindex := inStashIndex;
+  _stashhash := inStashHash;
 End;
 
 Destructor TAEGitStashFile.Destroy;
@@ -52,7 +52,7 @@ End;
 
 Function TAEGitStashFile.GetCommit(Const inRepository: Pgit_repository): Pgit_commit;
 Begin
-  Result := Context.GetStashCommit(_stashindex);
+  Result := Context.GetStashCommit(_stashhash);
 End;
 
 Function TAEGitStashFile.GetStatus: TArray<TAEGitFileStatus>;
@@ -76,7 +76,7 @@ Begin
       hasnew := True;
   End;
 
-  stashcommit := Context.GetStashCommit(_stashindex);
+  stashcommit := Context.GetStashCommit(_stashhash);
   Try
     parentcount := git_commit_parentcount(stashcommit);
 
@@ -162,7 +162,7 @@ Begin
   If Not _stageddiff.AsString.IsEmpty Then
     Exit;
 
-  stashcommit := Context.GetStashCommit(_stashindex);
+  stashcommit := Context.GetStashCommit(_stashhash);
   Try
     parentcount := git_commit_parentcount(stashcommit);
 
