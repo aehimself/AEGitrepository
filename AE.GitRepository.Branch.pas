@@ -187,6 +187,8 @@ Var
   tree: Pgit_tree;
   signature: Pgit_signature;
   parentcommits: Array[0..1] Of Pgit_commit;
+  samereference: Boolean;
+  logcode: TAEGitErrorCode;
 Begin
   Context.AssertCleanWorkTree;
 
@@ -202,7 +204,16 @@ Begin
     Try
       Context.HandleLibGit2Output('', git_branch_lookup(@branchref, Context.Repository, PAnsiChar(UTF8String(inMergeFromBranch)), GIT_BRANCH_LOCAL));
       Try
-        If Context.HandleLibGit2Output('git_reference_cmp', git_reference_cmp(headref, branchref), False) Then
+        samereference := git_reference_cmp(headref, branchref) = 0;
+
+        If samereference Then
+          logcode := geTrue
+        Else
+          logcode := geFalse;
+
+        Context.DoLibGit2Call('git_reference_cmp', logcode);
+
+        If samereference Then
           Exit;
 
         Context.HandleLibGit2Output('git_annotated_commit_from_ref', git_annotated_commit_from_ref(@theirhead, Context.Repository, branchref));

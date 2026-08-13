@@ -60,8 +60,6 @@ Var
   errorclass: TAEGitErrorClass;
 Begin
   Case inCommandResult Of
-    1:
-      errorcode := geFalse;
     GIT_OK:
       errorcode := geOk;
     GIT_ERROR:
@@ -542,6 +540,8 @@ Var
   iterator: Pgit_index_conflict_iterator;
   ancestor, ours, theirs: Pgit_index_entry;
   mergeresult: git_merge_file_result;
+  hasconflicts: Boolean;
+  logcode: TAEGitErrorCode;
 Begin
   Result := True;
 
@@ -549,7 +549,16 @@ Begin
   Try
     HandleLibGit2Output('git_index_read', git_index_read(index, 1));
 
-    If Not HandleLibGit2Output('git_index_has_conflicts', git_index_has_conflicts(index), False) Then
+    hasconflicts := git_index_has_conflicts(index) <> 0;
+
+    If hasconflicts Then
+      logcode := geTrue
+    Else
+      logcode := geFalse;
+
+    DoLibGit2Call('git_index_has_conflicts', logcode);
+
+    If Not hasconflicts Then
       Exit;
 
     HandleLibGit2Output('git_index_conflict_iterator_new', git_index_conflict_iterator_new(@iterator, index));
