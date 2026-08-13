@@ -107,6 +107,8 @@ Type
 
   TAEGitAuthTypes = Set Of TAEGitAuthType;
 
+  TAEGitErrorCodes = Set Of TAEGitErrorCode;
+
   TAELibGit2CallLogEvent = Procedure(Const inSender: TObject; Const inMethod: String; Const inErrorCode: TAEGitErrorCode) Of Object;
 
   TAELibGit2AuthCallback = Function(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer Of Object;

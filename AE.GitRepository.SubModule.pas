@@ -312,7 +312,7 @@ Begin
     Else
       _workdirhash := '';
 
-    If _parentcontext.HandleLibGit2Output('git_submodule_open', git_submodule_open(@subrepo, submodule), False) Then
+    If _parentcontext.HandleLibGit2Output('git_submodule_open', git_submodule_open(@subrepo, submodule), [geNotFound]) Then
     Begin
       LibGit2Repository := subrepo;
       _initialized := True;

@@ -88,8 +88,8 @@ Begin
     parents := nil;
     parentcommit := nil;
     Try
-      If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@parentoid, Context.Repository, 'HEAD'), False) And
-         Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, Context.Repository, @parentoid), False) Then
+      If Context.HandleLibGit2Output('git_reference_name_to_id', git_reference_name_to_id(@parentoid, Context.Repository, 'HEAD'), [geNotFound, geUnbornBranch]) And
+        Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@parentcommit, Context.Repository, @parentoid), [geNotFound]) Then
       Begin
         parentsarray[0] := parentcommit;
         parents := @parentsarray[0];
