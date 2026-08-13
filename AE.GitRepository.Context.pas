@@ -41,10 +41,11 @@ Type
     Function GetCurrentBranchName: String;
     Function GetDefaultRemoteName: String;
     Function GetSettings: TAEGitRepositorySettings;
-    Function GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
+    Function GetStashCommit(Const inStashHash: String): Pgit_commit;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
     Function OidToString(Const inOid: Pgit_oid): String;
     Function Repository: Pgit_repository;
+    Function StashIndexByHash(Const inStashHash: String): Integer;
     Function SolveConflicts: Boolean;
   End;
 
@@ -88,13 +89,13 @@ Begin
   Result := (Self As TAEGitRepositoryBase).Settings;
 End;
 
-Function TAEGitRepositoryContextHelper.GetStashCommit(Const inStashIndex: Integer): Pgit_commit;
-var
+Function TAEGitRepositoryContextHelper.GetStashCommit(Const inStashHash: String): Pgit_commit;
+Var
   reflog: Pgit_reflog;
   entry: Pgit_reflog_entry;
-  count: NativeUInt;
+  count, a: NativeUInt;
   oid: Pgit_oid;
-begin
+Begin
   Result := nil;
 
   HandleLibGit2Output('git_reflog_read', git_reflog_read(@reflog, Repository, 'refs/stash'));
@@ -106,18 +107,67 @@ begin
     If count = 0 Then
       Raise EAEGitException.Create('Stash is empty!');
 
-    If (inStashIndex < 0) Or (Cardinal(inStashIndex) >= count) Then
-      Raise EAEGitException.Create('Stash index ' + inStashIndex.ToString + ' is out of range!');
+    For a := 0 To count - 1 Do
+    Begin
+      entry := git_reflog_entry_byindex(reflog, a);
 
-    entry := git_reflog_entry_byindex(reflog, count - 1 - Cardinal(inStashIndex));
+      DoLibGit2Call('git_reflog_entry_byindex');
 
-    DoLibGit2Call('git_reflog_entry_byindex');
+      oid := git_reflog_entry_id_new(entry);
 
-    oid := git_reflog_entry_id_new(entry);
+      DoLibGit2Call('git_reflog_entry_id_new');
 
-    DoLibGit2Call('git_reflog_entry_id_new');
+      If OidToString(oid).ToLower = inStashHash.ToLower Then
+      Begin
+        HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Repository, oid));
 
-    HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@Result, Repository, oid));
+        Break;
+      End;
+    End;
+
+    If Not Assigned(Result) Then
+      Raise EAEGitException.Create('Stash ' + inStashHash + ' can not be found!');
+  Finally
+    git_reflog_free(reflog);
+
+    DoLibGit2Call('git_reflog_free');
+  End;
+End;
+
+Function TAEGitRepositoryContextHelper.StashIndexByHash(Const inStashHash: String): Integer;
+Var
+  reflog: Pgit_reflog;
+  entry: Pgit_reflog_entry;
+  count, a: NativeUInt;
+Begin
+  Result := -1;
+
+  If inStashHash.IsEmpty Then
+    Exit;
+
+  HandleLibGit2Output('git_reflog_read', git_reflog_read(@reflog, Repository, 'refs/stash'));
+  Try
+    count := git_reflog_entrycount(reflog);
+
+    DoLibGit2Call('git_reflog_entrycount');
+
+    If count = 0 Then
+      Exit;
+
+    For a := 0 To count - 1 Do
+    Begin
+      entry := git_reflog_entry_byindex(reflog, a);
+
+      DoLibGit2Call('git_reflog_entry_byindex');
+
+      If OidToString(git_reflog_entry_id_new(entry)).ToLower = inStashHash.ToLower Then
+      Begin
+        // Reflog entries are stored in reverse order compared to stash indexes
+        Result := Integer(count - 1 - a);
+
+        Break;
+      End;
+    End;
   Finally
     git_reflog_free(reflog);
 
@@ -253,7 +303,7 @@ Procedure TAEGitRepositoryContextHelper.CollectChangedFiles(Const inChangedFiles
 Var
   statuslist: Pgit_status_list;
   options: git_status_options;
-  count, idx: Integer;
+  count, a: Integer;
   status: Pgit_status_entry;
 Begin
   HandleLibGit2Output('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
@@ -269,9 +319,9 @@ Begin
 
     DoLibGit2Call('git_status_list_entrycount');
 
-    For idx := 0 To count - 1 Do
+    For a := 0 To count - 1 Do
     Begin
-      status := git_status_byindex(statuslist, idx);
+      status := git_status_byindex(statuslist, a);
 
       DoLibGit2Call('git_status_byindex');
 

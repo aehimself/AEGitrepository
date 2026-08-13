@@ -16,7 +16,7 @@ Uses AE.GitRepository.RefreshableObject, AE.GitRepository.Context, System.Generi
 Type
   TAEGitStash = Class(TAEGitRepositoryRefreshableObject)
   strict private
-    _index: Integer;
+    _hash: String;
     _items: TObjectDictionary<String, TAEGitStashFile>;
     _message: String;
     _patch: TAEGitDiff;
@@ -26,22 +26,21 @@ Type
     Procedure InternalClear; Override;
     Procedure InternalRefresh; Override;
   public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String); ReIntroduce; Virtual;
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inHash: String; Const inMessage: String); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Procedure Drop;
     Procedure Pop;
     Function GetPatch(Const inFileNames: TArray<String> = []): TAEGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Files[Const inGitPath: String]: TAEGitStashFile Read GetFile;
-    Property Index: Integer Read _index;
+    Property Hash: String Read _hash;
     Property Message: String Read _message Write _message;
   End;
 
-  TAEGitStashList = Class(TList<String>);
-
   TAEGitStashes = Class(TAEGitRepositoryRefreshableObject)
   strict private
-    _items: TObjectDictionary<Integer, TAEGitStash>;
+    _items: TObjectDictionary<String, TAEGitStash>;
+    _order: TList<String>;
     Function GetCount: Integer;
     Function GetItem(Const inStashIndex: Integer): TAEGitStash;
   strict protected
@@ -50,7 +49,7 @@ Type
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); Override;
     Destructor Destroy; Override;
-    Procedure Push(Const inStashMessage: String);
+    Function Push(Const inStashMessage: String): String;
     Property Count: Integer Read GetCount;
     Property Items[Const inStashIndex: Integer]: TAEGitStash Read GetItem; Default;
   End;
@@ -68,14 +67,14 @@ Begin
   _items.Clear;
 End;
 
-Constructor TAEGitStash.Create(Const inContext: TAEGitRepositoryContext; Const inIndex: Integer; Const inMessage: String);
+Constructor TAEGitStash.Create(Const inContext: TAEGitRepositoryContext; Const inHash: String; Const inMessage: String);
 Begin
   inherited Create(inContext);
 
   _items := TObjectDictionary<String, TAEGitStashFile>.Create([doOwnsValues]);
   _patch := TAEGitDiff.Create;
 
-  _index := inIndex;
+  _hash := inHash;
   _message := inMessage;
 End;
 
@@ -88,8 +87,15 @@ Begin
 End;
 
 Procedure TAEGitStash.Drop;
+Var
+  a: Integer;
 Begin
-  Context.HandleLibGit2Output('git_stash_drop', git_stash_drop(Context.Repository, size_t(_index)));
+  a := Context.StashIndexByHash(_hash);
+
+  If a < 0 Then
+    Raise EAEGitException.Create('Stash ' + _hash + ' can not be found!');
+
+  Context.HandleLibGit2Output('git_stash_drop', git_stash_drop(Context.Repository, size_t(a)));
 
   Context.RefreshStashes;
 End;
@@ -116,7 +122,7 @@ Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): TAEGitDif
 var
   commit: Pgit_commit;
 begin
-  commit := Context.GetStashCommit(_index);
+  commit := Context.GetStashCommit(_hash);
   Try
     _patch.AsString := Self.GetPatchFromCommit(commit, inFileNames, Context.Repository);
 
@@ -131,12 +137,18 @@ End;
 Procedure TAEGitStash.Pop;
 Var
   options: git_stash_apply_options;
+  a: Integer;
 Begin
+  a := Context.StashIndexByHash(_hash);
+
+  If a < 0 Then
+    Raise EAEGitException.Create('Stash ' + _hash + ' can not be found!');
+
   Context.HandleLibGit2Output('git_stash_apply_options_init', git_stash_apply_options_init(@options, GIT_STASH_APPLY_OPTIONS_VERSION));
 
   options.flags := 0;
 
-  Context.HandleLibGit2Output('git_stash_pop', git_stash_pop(Context.Repository, size_t(_index), @options));
+  Context.HandleLibGit2Output('git_stash_pop', git_stash_pop(Context.Repository, size_t(a), @options));
 
   Context.SolveConflicts;
 
@@ -238,7 +250,7 @@ Begin
     Try
       keystoremove.AddRange(_items.Keys);
 
-      stashcommit := Context.GetStashCommit(_index);
+      stashcommit := Context.GetStashCommit(_hash);
       Try
         parentcount := git_commit_parentcount(stashcommit);
 
@@ -382,7 +394,7 @@ Begin
       Begin
         If Not _items.TryGetValue(pair.Key, stashfile) Then
         Begin
-          stashfile := TAEGitStashFile.Create(Context, pair.Key, _index, pair.Value[0]);
+          stashfile := TAEGitStashFile.Create(Context, pair.Key, _hash, pair.Value[0]);
           _items.Add(pair.Key, stashfile);
         End;
 
@@ -410,17 +422,20 @@ End;
 Procedure TAEGitStashes.InternalClear;
 Begin
   _items.Clear;
+  _order.Clear;
 End;
 
 Constructor TAEGitStashes.Create(Const inContext: TAEGitRepositoryContext);
 Begin
   inherited;
 
-  _items := TObjectDictionary<Integer, TAEGitStash>.Create([doOwnsValues]);
+  _items := TObjectDictionary<String, TAEGitStash>.Create([doOwnsValues]);
+  _order := TList<String>.Create;
 End;
 
 Destructor TAEGitStashes.Destroy;
 Begin
+  FreeAndNil(_order);
   FreeAndNil(_items);
 
   inherited;
@@ -431,7 +446,10 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inStashIndex];
+  If (inStashIndex < 0) Or (inStashIndex >= _order.Count) Then
+    Raise EAEGitException.Create('Stash index ' + inStashIndex.ToString + ' is out of range!');
+
+  Result := _items[_order[inStashIndex]];
 End;
 
 Function TAEGitStashes.GetCount: Integer;
@@ -439,10 +457,10 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items.Count;
+  Result := _order.Count;
 End;
 
-Procedure TAEGitStashes.Push(Const inStashMessage: String);
+Function TAEGitStashes.Push(Const inStashMessage: String): String;
 Var
   signature: Pgit_signature;
   oid: git_oid;
@@ -450,6 +468,8 @@ Begin
   Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
   Try
     Context.HandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+
+    Result := Context.OidToString(@oid);
   Finally
     git_signature_free(signature);
 
@@ -463,42 +483,50 @@ End;
 
 Procedure TAEGitStashes.InternalRefresh;
 Var
-  list: TAEGitStashList;
-  keystoremove: TList<Integer>;
-  idx: Integer;
+  payload: TAEGitStashListPayload;
+  keystoremove: TList<String>;
+  a: Integer;
+  key: String;
   stash: TAEGitStash;
 Begin
   Self.Loaded := False;
 
-  list := TAEGitStashList.Create;
+  payload.Context := Context;
+  payload.List := TAEGitStashList.Create;
   Try
-    keystoremove := TList<Integer>.Create;
+    keystoremove := TList<String>.Create;
     Try
-      Context.HandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.Repository, @LibGit2StashListCallback, @list));
+      Context.HandleLibGit2Output('git_stash_foreach', git_stash_foreach(Context.Repository, @LibGit2StashListCallback, @payload));
 
       keystoremove.AddRange(_items.Keys);
 
-      For idx := 0 To list.Count - 1 Do
-      Begin
-        If Not _items.TryGetValue(idx, stash) Then
-        Begin
-          stash := TAEGitStash.Create(Context, idx, list[idx]);
+      _order.Clear;
 
-          _items.Add(idx, stash);
+      For a := 0 To payload.List.Count - 1 Do
+      Begin
+        key := payload.List[a].Hash;
+
+        If Not _items.TryGetValue(key, stash) Then
+        Begin
+          stash := TAEGitStash.Create(Context, key, payload.List[a].MessageText);
+
+          _items.Add(key, stash);
         End
         Else
-          stash.Message := list[idx];
+          stash.Message := payload.List[a].MessageText;
 
-        keystoremove.Remove(idx);
+        _order.Add(key);
+
+        keystoremove.Remove(key);
       End;
 
-      For idx In keystoremove Do
-        _items.Remove(idx);
+      For key In keystoremove Do
+        _items.Remove(key);
     Finally
       FreeAndNil(keystoremove);
     End;
   Finally
-    FreeAndNil(list);
+    FreeAndNil(payload.List);
   End;
 
   Self.Loaded := True;
