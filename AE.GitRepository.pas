@@ -31,6 +31,7 @@ Type
     Constructor Create; Override;
     Destructor Destroy; Override;
     Procedure Clone(Const inRepository: String; Const inLocalFolder: String);
+    Procedure Init(Const inRepository: String; Const inIsBare: Boolean);
     Property GitRepositoryDirectory: String Read _repodir Write SetRepoDir;
     Property OnBlockConflict: TAEGitBlockConflictCallback Read _onblockconflict Write _onblockconflict;
     Property OnLibGit2Call: TAELibGit2CallLogEvent Read _onlibgit2call Write _onlibgit2call;
@@ -99,6 +100,16 @@ Procedure TAEGitRepository.DoLibGit2Call(Const inMethod: String; Const inErrorCo
 Begin
   If Assigned(_onlibgit2call) Then
     _onlibgit2call(Self, inMethod, inErrorCode);
+End;
+
+Procedure TAEGitRepository.Init(Const inRepository: String; Const inIsBare: Boolean);
+Begin
+  If Assigned(LibGit2Repository) Then
+    Self.CloseGitRepository;
+
+  HandleLibGit2Output('git_repository_init', git_repository_init(@LibGit2Repository, PAnsiChar(UTF8String(inRepository)), Ord(inIsBare)));
+
+  _repodir := inRepository;
 End;
 
 Procedure TAEGitRepository.OpenGitRepository;
