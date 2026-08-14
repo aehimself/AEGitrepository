@@ -464,12 +464,27 @@ Function TAEGitStashes.Push(Const inStashMessage: String): String;
 Var
   signature: Pgit_signature;
   oid: git_oid;
+  a: Integer;
 Begin
   Context.HandleLibGit2Output('git_signature_now', git_signature_now(@signature, PAnsiChar(UTF8String(Context.GetSettings.FullName)), PAnsiChar(UTF8String(Context.GetSettings.EMailAddress))));
   Try
-    Context.HandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+    Try
+      Try
+        Context.HandleLibGit2Output('git_stash_save', git_stash_save(@oid, Context.Repository, signature, PAnsiChar(UTF8String(inStashMessage)), GIT_STASH_INCLUDE_UNTRACKED));
+      Finally
+        Result := Context.OidToString(@oid);
+      End;
+    Except
+      On E:Exception Do
+      Begin
+        a := Context.StashIndexByHash(Result);
 
-    Result := Context.OidToString(@oid);
+        If a <> -1 Then
+          Context.HandleLibGit2Output('git_stash_drop', git_stash_drop(Context.Repository, size_t(a)));
+
+        Raise;
+      End;
+    End;
   Finally
     git_signature_free(signature);
 
