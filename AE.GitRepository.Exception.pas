@@ -13,7 +13,9 @@ Interface
 Uses System.SysUtils, AE.GitRepository.TypeDef;
 
 Type
-  EAEGitException = Class(Exception);
+  EAEGitWarning = Class(Exception);
+
+  EAEGitException = Class(EAEGitWarning);
 
   EAELibGitException = Class(EAEGitException)
   strict private

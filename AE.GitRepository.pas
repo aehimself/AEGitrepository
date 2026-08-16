@@ -23,8 +23,9 @@ Type
     Procedure SetRepoDir(Const inRepoDir: String);
   strict protected
     Procedure CloseGitRepository;
-    Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK); Override;
     Procedure OpenGitRepository;
+  protected
+    Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK); Override;
     Procedure RefreshSubmodules; Override;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean; Override;
   public

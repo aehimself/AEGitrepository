@@ -1009,16 +1009,16 @@ End;
 
 Procedure TAEGitBranches.New(Const inBranchName: String);
 Var
-  ref, branchRef: Pgit_reference;
+  ref, branchref: Pgit_reference;
   commit: Pgit_commit;
 Begin
   Context.HandleLibGit2Output('git_repository_head', git_repository_head(@ref, Context.Repository));
   Try
     Context.HandleLibGit2Output('git_commit_lookup', git_commit_lookup(@commit, Context.Repository, git_reference_target(ref)));
     Try
-      Context.HandleLibGit2Output('git_branch_create', git_branch_create(@branchRef, Context.Repository, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
+      Context.HandleLibGit2Output('git_branch_create', git_branch_create(@branchref, Context.Repository, PAnsiChar(UTF8String(inBranchName)), commit, Ord(False)));
 
-      git_reference_free(branchRef);
+      git_reference_free(branchref);
 
       Context.DoLibGit2Call('git_reference_free');
     Finally
@@ -1032,7 +1032,8 @@ Begin
     Context.DoLibGit2Call('git_reference_free');
   End;
 
-  Refresh;
+  If Self.Loaded Then
+    _items.Add(inBranchName, TAEGitBranch.Create(Context, inBranchName));
 End;
 
 Function TAEGitBranches.GetCurrent: TAEGitHeadTarget;

@@ -11,13 +11,14 @@ Unit AE.GitRepository.Base;
 Interface
 
 Uses libgit2, AE.GitRepository.TypeDef, AE.GitRepository.Context, AE.GitRepository.Settings, AE.GitRepository.Branch,
-     AE.GitRepository.Stash, AE.GitRepository.WorkTree, AE.GitRepository.CommitDecorationCache;
+     AE.GitRepository.Stash, AE.GitRepository.WorkTree, AE.GitRepository.CommitDecorationCache, AE.GitRepository.Remote;
 
 Type
   TAEGitRepositoryBase = Class(TAEGitRepositoryContext)
   strict private
     _branches: TAEGitBranches;
     _commitdecorationcache: TAEGitCommitDecorationCache;
+    _remotes: TAEGitRemotes;
     _repo: Pgit_repository;
     _settings: TAEGitRepositorySettings;
     _stashes: TAEGitStashes;
@@ -26,24 +27,23 @@ Type
   strict protected
     Procedure ClearRepositoryObjects;
   protected
-    Procedure ClearCommitDecoCache; Virtual;
+    Procedure ClearCommitDecoCache;
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK); Virtual;
-    Procedure RefreshCommitDecoCache; Virtual;
+    Procedure RefreshCommitDecoCache;
     Procedure RefreshSubmodules; Virtual;
-    Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String); Virtual;
-    Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer; Virtual;
-    Function CurrentBranchName: String; Virtual;
-    Function GetDefaultRemoteName: String; Virtual;
+    Procedure SplitBranchName(Var outBranchName: String; Var outRemote: String);
+    Function AuthCallback(outGitCredential: PPgit_credential; inURL, inUserName: PAnsiChar; inAllowedTypes: TAEGitAuthTypes): Integer;
+    Function CurrentBranchName: String;
     Function HandleLibGit2Output(Const inMethod: String; Const inCommandResult: Integer; Const inAcceptableErrorCodes: TAEGitErrorCodes = []): Boolean;
     Function ResolveConflictsManually(Const inFileName, inConflictedContent: String): Boolean; Virtual;
-    Function SolveConflicts: Boolean; Virtual;
+    Function SolveConflicts: Boolean;
     Property CommitDecoCache: TAEGitCommitDecorationCache Read GetCommitDecorationCache;
     Property LibGit2Repository: Pgit_repository Read _repo Write _repo;
   public
     Constructor Create; ReIntroduce; Virtual;
     Destructor Destroy; Override;
-    Function RemoteURL(inRemote: String = ''): String;
     Property Branches: TAEGitBranches Read _branches;
+    Property Remotes: TAEGitRemotes Read _remotes;
     Property Settings: TAEGitRepositorySettings Read _settings;
     Property Stashes: TAEGitStashes Read _stashes;
     Property WorkTree: TAEGitWorkTree Read _worktree;
@@ -437,10 +437,12 @@ Begin
 
   _branches := TAEGitBranches.Create(Self);
   _commitdecorationcache := TAEGitCommitDecorationCache.Create;
-  _repo := nil;
+  _remotes := TAEGitRemotes.Create(Self);
   _settings := TAEGitRepositorySettings.Create;
   _stashes := TAEGitStashes.Create(Self);
   _worktree := TAEGitWorkTree.Create(Self);
+
+  _repo := nil;
 End;
 
 Function TAEGitRepositoryBase.CurrentBranchName: String;
@@ -467,6 +469,7 @@ Begin
   FreeAndNil(_worktree);
   FreeAndNil(_stashes);
   FreeAndNil(_settings);
+  FreeAndNil(_remotes);
   FreeAndNil(_commitdecorationcache);
   FreeAndNil(_branches);
 
@@ -486,45 +489,9 @@ Begin
   Result := _commitdecorationcache;
 End;
 
-Function TAEGitRepositoryBase.GetDefaultRemoteName: String;
-Var
-  remotes: git_strarray;
-Begin
-  Result := '';
-
-  HandleLibGit2Output('git_remote_list', git_remote_list(@remotes, _repo));
-  Try
-    If remotes.Count > 0 Then
-      Result := String(UTF8String(remotes.strings^));
-  Finally
-    git_strarray_dispose(@remotes);
-
-    DoLibGit2Call('git_strarray_dispose');
-  End;
-End;
-
 Procedure TAEGitRepositoryBase.RefreshSubmodules;
 Begin
   // Submodule collection ownership is implemented in descendants.
-End;
-
-Function TAEGitRepositoryBase.RemoteURL(inRemote: String): String;
-Var
-  remote: Pgit_remote;
-Begin
-  If inRemote.IsEmpty Then
-    inRemote := GetDefaultRemoteName;
-
-  HandleLibGit2Output('git_remote_lookup', git_remote_lookup(@remote, _repo, PAnsiChar(UTF8String(inRemote))));
-  Try
-    Result := String(UTF8String(git_remote_url(remote)));
-
-    DoLibGit2Call('git_remote_url');
-  Finally
-    git_remote_free(remote);
-
-    DoLibGit2Call('git_remote_free');
-  End;
 End;
 
 Procedure TAEGitRepositoryBase.ClearRepositoryObjects;
