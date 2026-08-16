@@ -27,6 +27,7 @@ Type
     Procedure RefreshActualCommitCount;
     Procedure RefreshCommitDecorationCache;
     Procedure RefreshCurrentBranchCommits;
+    Procedure RefreshRemotes;
     Procedure RefreshStashes;
     Procedure RefreshSubmodules;
     Procedure RefreshWorkTree;
@@ -70,7 +71,7 @@ End;
 
 Function TAEGitRepositoryContextHelper.GetDefaultRemoteName: String;
 Begin
-  Result := TAEGitRepositoryBaseAccess(Self As TAEGitRepositoryBase).GetDefaultRemoteName;
+  Result := (Self As TAEGitRepositoryBase).Remotes.Default.Name;
 End;
 
 Function TAEGitRepositoryContextHelper.OidToString(Const inOid: Pgit_oid): String;
@@ -272,6 +273,11 @@ Begin
 
   TAEGitBranch(target).Commits.Refresh(False);
   TAEGitBranch(target).UpdateCommitCount;
+End;
+
+Procedure TAEGitRepositoryContextHelper.RefreshRemotes;
+Begin
+  (Self As TAEGitRepositoryBase).Remotes.Refresh(False);
 End;
 
 Procedure TAEGitRepositoryContextHelper.RefreshStashes;

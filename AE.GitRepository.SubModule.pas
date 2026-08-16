@@ -55,7 +55,7 @@ Type
     Function GetTrackingBranch: String;
     Function GetUrl: String;
     Function GetWorkDirHash: String;
-  strict protected
+  protected
     Procedure DoLibGit2Call(Const inMethod: String; Const inErrorCode: TAEGitErrorCode = geOK); Override;
     Procedure RefreshSubmodules; Override;
   public
