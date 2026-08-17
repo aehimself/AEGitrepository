@@ -18,6 +18,7 @@ Experimental is the fully object-oriented version of the original TAEGitReposito
 
 ### General
 - Cloning a remote repository
+- Initializing a bare or non-bare repository
 - Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
 - Event handler to log all executed calls to git2.dll and their results
 - Lazy loading in every object to minimize blocking calls
@@ -29,7 +30,7 @@ Experimental is the fully object-oriented version of the original TAEGitReposito
 - Pruning remotes from branches with no existing upstream
 ### Branches
 - Rebasing a branch on any local/remote branch. Also includes aborting and continuing previous rebases.
-- Merging any local/remote branch into a local one. Also includes aborting and continuint previous rebases.
+- Merging any local/remote branch into a local one. Also includes aborting and continuing previous merges.
 - Checking out a branch or commit, keeping track of actually checked out object
 - Listing available local and remote branches
 - Get incoming (pull) / outgoing (push) commit count
