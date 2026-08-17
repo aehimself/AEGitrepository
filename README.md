@@ -21,6 +21,12 @@ Experimental is the fully object-oriented version of the original TAEGitReposito
 - Support for user / password and SSH key authentication (requires libssh2 externally or embedded)
 - Event handler to log all executed calls to git2.dll and their results
 - Lazy loading in every object to minimize blocking calls
+### Remotes
+- Adding a new remote
+- Removing an existing remote
+- Renaming remote
+- Changing the target URL of a remote
+- Pruning remotes from branches with no existing upstream
 ### Branches
 - Rebasing a branch on any local/remote branch. Also includes aborting and continuing previous rebases.
 - Merging any local/remote branch into a local one. Also includes aborting and continuint previous rebases.
