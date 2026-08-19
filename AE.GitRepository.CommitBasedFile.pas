@@ -19,6 +19,7 @@ Type
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Virtual; Abstract;
     Function GetDiffString: String; Override;
+    Function InternalGetOriginalContent: String; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
     Property Status: TAEGitFileStatus Read GetStatus;
@@ -44,6 +45,45 @@ Begin
   commit := Self.GetCommit(Context.Repository);
   Try
     Result := Self.GetPatchFromCommit(commit, [Self.GitPath], Context.Repository);
+  Finally
+    git_commit_free(commit);
+
+    Context.DoLibGit2Call('git_commit_free');
+  End;
+End;
+
+Function TAEGitCommitBasedFile.InternalGetOriginalContent: String;
+Var
+  commit, parent: Pgit_commit;
+  parenttree: Pgit_tree;
+  parentcount: Cardinal;
+Begin
+  Result := '';
+
+  commit := Self.GetCommit(Context.Repository);
+  Try
+    parentcount := git_commit_parentcount(commit);
+
+    Context.DoLibGit2Call('git_commit_parentcount');
+
+    If parentcount = 0 Then
+      Exit;
+
+    Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, commit, 0));
+    Try
+      Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
+      Try
+        Result := Self.GetFileContentFromTree(parenttree, Self.GitPath, Context.Repository);
+      Finally
+        git_tree_free(parenttree);
+
+        Context.DoLibGit2Call('git_tree_free');
+      End;
+    Finally
+      git_commit_free(parent);
+
+      Context.DoLibGit2Call('git_commit_free');
+    End;
   Finally
     git_commit_free(commit);
 

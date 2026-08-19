@@ -17,16 +17,20 @@ Type
   strict private
     _diff: TAEGitDiff;
     _gitpath: String;
+    _originalcontent: String;
     _status: TArray<TAEGitFileStatus>;
   strict protected
     Function GetDiff: TAEGitDiff; Virtual;
     Function GetDiffString: String; Virtual; Abstract;
+    Function GetOriginalContent: String; Virtual;
+    Function InternalGetOriginalContent: String; Virtual; Abstract;
     Property InternalStatus: TArray<TAEGitFileStatus> Read _status Write _status;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Property Diff: TAEGitDiff Read GetDiff;
     Property GitPath: String Read _gitpath;
+    Property OriginalContent: String Read GetOriginalContent;
   End;
 
 Implementation
@@ -55,6 +59,14 @@ Begin
     _diff.AsString := Self.GetDiffString;
 
   Result := _diff;
+End;
+
+Function TAEGitRepositoryFile.GetOriginalContent: String;
+Begin
+  If _originalcontent.IsEmpty Then
+    _originalcontent := InternalGetOriginalContent;
+
+  Result := _originalcontent;
 End;
 
 End.

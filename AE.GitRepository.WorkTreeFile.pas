@@ -22,6 +22,8 @@ Type
   strict protected
     Function GetDiff: TAEGitDiff; Override;
     Function GetDiffString: String; Override;
+    Function GetOriginalContent: String; Override;
+    Function InternalGetOriginalContent: String; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String); Override;
     Destructor Destroy; Override;
@@ -39,6 +41,35 @@ Uses libgit2, System.SysUtils;
 Function TAEGitWorkTreeFile.GetDiffString: String;
 Begin
   Result := Self.GetPatchFromWorkTree([Self.GitPath], False);
+End;
+
+Function TAEGitWorkTreeFile.GetOriginalContent: String;
+Begin
+  // Skip caching
+
+  Result := InternalGetOriginalContent;
+End;
+
+Function TAEGitWorkTreeFile.InternalGetOriginalContent: String;
+Var
+  index: Pgit_index;
+  entry: Pgit_index_entry;
+Begin
+  Result := '';
+
+  Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
+  Try
+    entry := git_index_get_bypath(index, PAnsiChar(UTF8String(Self.GitPath)), 0);
+
+    Context.DoLibGit2Call('git_index_get_bypath');
+
+    If Assigned(entry) Then
+      Result := Self.GetBlobContent(@entry.id, Context.Repository);
+  Finally
+    git_index_free(index);
+
+    Context.DoLibGit2Call('git_index_free');
+  End;
 End;
 
 Constructor TAEGitWorkTreeFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String);

@@ -17,6 +17,8 @@ Type
   strict private
     _context: TAEGitRepositoryContext;
   strict protected
+    Function GetBlobContent(Const inOid: Pgit_oid; Const inRepository: Pgit_repository): String;
+    Function GetFileContentFromTree(Const inTree: Pgit_tree; Const inGitPath: String; Const inRepository: Pgit_repository): String;
     Function GetPatchBetweenTrees(Const inFromTree: Pgit_tree; Const inToTree: Pgit_tree; Const inFileNames: TArray<String>): String;
     Function GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
     Function GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
@@ -26,6 +28,86 @@ Type
   End;
 
 Implementation
+
+Uses AE.GitRepository.TypeDef;
+
+Function TAEGitRepositoryContextedObject.GetBlobContent(Const inOid: Pgit_oid; Const inRepository: Pgit_repository): String;
+Var
+  blob: Pgit_blob;
+  rawcontent: Pointer;
+  rawsize: git_object_size_t;
+  content: UTF8String;
+Begin
+  Result := '';
+
+  If Not Assigned(inOid) Or (git_oid_is_zero(inOid) <> 0) Then
+    Exit;
+
+  If Not Context.HandleLibGit2Output('git_blob_lookup', git_blob_lookup(@blob, inRepository, inOid), [geNotFound]) Then
+    Exit;
+
+  Try
+    If git_blob_is_binary(blob) <> 0 Then
+    Begin
+      Context.DoLibGit2Call('git_blob_is_binary');
+
+      Exit;
+    End;
+
+    Context.DoLibGit2Call('git_blob_is_binary');
+
+    rawcontent := git_blob_rawcontent(blob);
+
+    Context.DoLibGit2Call('git_blob_rawcontent');
+
+    rawsize := git_blob_rawsize(blob);
+
+    Context.DoLibGit2Call('git_blob_rawsize');
+
+    SetLength(content, NativeInt(rawsize));
+
+    If rawsize > 0 Then
+      Move(rawcontent^, PAnsiChar(content)^, NativeInt(rawsize));
+
+    Result := String(content);
+  Finally
+    git_blob_free(blob);
+
+    Context.DoLibGit2Call('git_blob_free');
+  End;
+End;
+
+Function TAEGitRepositoryContextedObject.GetFileContentFromTree(Const inTree: Pgit_tree; Const inGitPath: String; Const inRepository: Pgit_repository): String;
+Var
+  entry: Pgit_tree_entry;
+Begin
+  Result := '';
+
+  If Not Assigned(inTree) Then
+    Exit;
+
+  If Not Context.HandleLibGit2Output('git_tree_entry_bypath', git_tree_entry_bypath(@entry, inTree, PAnsiChar(UTF8String(inGitPath))), [geNotFound]) Then
+    Exit;
+
+  Try
+    If git_tree_entry_type(entry) <> GIT_OBJECT_BLOB Then
+    Begin
+      Context.DoLibGit2Call('git_tree_entry_type');
+
+      Exit;
+    End;
+
+    Context.DoLibGit2Call('git_tree_entry_type');
+
+    Result := Self.GetBlobContent(git_tree_entry_id(entry), inRepository);
+
+    Context.DoLibGit2Call('git_tree_entry_id');
+  Finally
+    git_tree_entry_free(entry);
+
+    Context.DoLibGit2Call('git_tree_entry_free');
+  End;
+End;
 
 Function TAEGitRepositoryContextedObject.GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
 Var

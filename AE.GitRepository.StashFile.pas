@@ -22,6 +22,7 @@ Type
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Override;
     Function GetDiffString: String; Override;
+    Function InternalGetOriginalContent: String; Override;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStashHash: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
     Destructor Destroy; Override;
@@ -58,6 +59,54 @@ End;
 Function TAEGitStashFile.GetStatus: TArray<TAEGitFileStatus>;
 Begin
   Result := Self.InternalStatus;
+End;
+
+Function TAEGitStashFile.InternalGetOriginalContent: String;
+Var
+  stat: TAEGitFileStatus;
+  stashcommit, parent: Pgit_commit;
+  parenttree: Pgit_tree;
+  parentcount: Cardinal;
+Begin
+  Result := '';
+
+  For stat In Self.InternalStatus Do
+    If stat In [gfsNew, gfsUntracked] Then
+      Exit;
+
+  stashcommit := Context.GetStashCommit(_stashhash);
+  Try
+    parentcount := git_commit_parentcount(stashcommit);
+
+    Context.DoLibGit2Call('git_commit_parentcount');
+
+    If parentcount < 2 Then
+    Begin
+      Result := inherited;
+
+      Exit;
+    End;
+
+    Context.HandleLibGit2Output('git_commit_parent', git_commit_parent(@parent, stashcommit, 1));
+    Try
+      Context.HandleLibGit2Output('git_commit_tree', git_commit_tree(@parenttree, parent));
+      Try
+        Result := Self.GetFileContentFromTree(parenttree, Self.GitPath, Context.Repository);
+      Finally
+        git_tree_free(parenttree);
+
+        Context.DoLibGit2Call('git_tree_free');
+      End;
+    Finally
+      git_commit_free(parent);
+
+      Context.DoLibGit2Call('git_commit_free');
+    End;
+  Finally
+    git_commit_free(stashcommit);
+
+    Context.DoLibGit2Call('git_commit_free');
+  End;
 End;
 
 Function TAEGitStashFile.GetDiffString: String;
