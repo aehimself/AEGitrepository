@@ -18,8 +18,8 @@ Type
 
   TAEGitSubmodules = Class(TAEGitRepositoryRefreshableObject)
   strict private
-    _items: TObjectDictionary<String, TAEGitSubmodule>;
-    Function GetItem(Const inSubmodulePath: String): TAEGitSubmodule;
+    _submodules: TObjectDictionary<String, TAEGitSubmodule>;
+    Function GetSubmodule(Const inSubmodulePath: String): TAEGitSubmodule;
     Function GetPaths: TArray<String>;
   strict protected
     Procedure InternalClear; Override;
@@ -29,7 +29,7 @@ Type
     Destructor Destroy; Override;
     Procedure InitializeAll(Const inOverwrite: Boolean = False);
     Procedure UpdateAll(Const inInit: Boolean = True);
-    Property Items[Const inSubmodulePath: String]: TAEGitSubmodule Read GetItem; Default;
+    Property Submodule[Const inSubmodulePath: String]: TAEGitSubmodule Read GetSubmodule; Default;
     Property Paths: TArray<String> Read GetPaths;
   End;
 
@@ -88,19 +88,21 @@ Constructor TAEGitSubmodules.Create(Const inContext: TAEGitRepositoryContext);
 Begin
   inherited Create(inContext);
 
-  _items := TObjectDictionary<String, TAEGitSubmodule>.Create([doOwnsValues]);
+  _submodules := TObjectDictionary<String, TAEGitSubmodule>.Create([doOwnsValues]);
 End;
 
 Destructor TAEGitSubmodules.Destroy;
 Begin
-  FreeAndNil(_items);
+  FreeAndNil(_submodules);
 
   inherited;
 End;
 
 Procedure TAEGitSubmodules.InternalClear;
 Begin
-  _items.Clear;
+  inherited;
+
+  _submodules.Clear;
 End;
 
 Procedure TAEGitSubmodules.InitializeAll(Const inOverwrite: Boolean = False);
@@ -110,7 +112,7 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  For submodule In _items.Values Do
+  For submodule In _submodules.Values Do
     submodule.Initialize(inOverwrite);
 End;
 
@@ -121,16 +123,16 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  For submodule In _items.Values Do
+  For submodule In _submodules.Values Do
     submodule.Update(inInit);
 End;
 
-Function TAEGitSubmodules.GetItem(Const inSubmodulePath: String): TAEGitSubmodule;
+Function TAEGitSubmodules.GetSubmodule(Const inSubmodulePath: String): TAEGitSubmodule;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inSubmodulePath];
+  Result := _submodules[inSubmodulePath];
 End;
 
 Function TAEGitSubmodules.GetPaths: TArray<String>;
@@ -138,7 +140,7 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items.Keys.ToArray;
+  Result := _submodules.Keys.ToArray;
 
   TArray.Sort<String>(Result);
 End;
@@ -162,15 +164,15 @@ Begin
 
     keystoremove := TList<String>.Create;
     Try
-      keystoremove.AddRange(_items.Keys);
+      keystoremove.AddRange(_submodules.Keys);
 
       For path In list Do
       Begin
-        If Not _items.TryGetValue(path, submodule) Then
+        If Not _submodules.TryGetValue(path, submodule) Then
         Begin
           submodule := TAEGitSubmodule.Create(Context, path);
 
-          _items.Add(path, submodule);
+          _submodules.Add(path, submodule);
         End
         Else
           submodule.Refresh;
@@ -179,7 +181,7 @@ Begin
       End;
 
       For path In keystoremove Do
-        _items.Remove(path);
+        _submodules.Remove(path);
     Finally
       FreeAndNil(keystoremove);
     End;

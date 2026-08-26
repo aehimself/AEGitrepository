@@ -21,7 +21,7 @@ Type
     Function GetFileContentFromTree(Const inTree: Pgit_tree; Const inGitPath: String; Const inRepository: Pgit_repository): String;
     Function GetPatchBetweenTrees(Const inFromTree: Pgit_tree; Const inToTree: Pgit_tree; Const inFileNames: TArray<String>): String;
     Function GetPatchFromCommit(Const inCommit: Pgit_commit; Const inFileNames: TArray<String>; Const inRepository: Pgit_repository): String;
-    Function GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
+    Function GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedPatch: Boolean): String;
     Property Context: TAEGitRepositoryContext Read _context;
   public
     Constructor Create(Const inContext: TAEGitRepositoryContext); ReIntroduce; Virtual;
@@ -37,6 +37,7 @@ Var
   rawcontent: Pointer;
   rawsize: git_object_size_t;
   content: UTF8String;
+  a: Integer;
 Begin
   Result := '';
 
@@ -47,14 +48,12 @@ Begin
     Exit;
 
   Try
-    If git_blob_is_binary(blob) <> 0 Then
-    Begin
-      Context.DoLibGit2Call('git_blob_is_binary');
-
-      Exit;
-    End;
+    a := git_blob_is_binary(blob);
 
     Context.DoLibGit2Call('git_blob_is_binary');
+
+    If a <> 0 Then
+      Exit;
 
     rawcontent := git_blob_rawcontent(blob);
 
@@ -197,7 +196,7 @@ Begin
   End;
 End;
 
-Function TAEGitRepositoryContextedObject.GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): String;
+Function TAEGitRepositoryContextedObject.GetPatchFromWorkTree(Const inFileNames: TArray<String>; Const inStagedPatch: Boolean): String;
 Var
   diff: Pgit_diff;
   buf: git_buf;
@@ -229,7 +228,7 @@ Begin
     options.pathspec.strings := @filenames[0];
   End;
 
-  If inStagedOnly Then
+  If inStagedPatch Then
   Begin
     Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@head, Context.Repository, 'HEAD'));
     Try

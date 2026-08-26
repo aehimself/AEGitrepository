@@ -34,12 +34,16 @@ Type
   TAEGitDiff = Class
   strict private
     _diff: String;
+    _usecache: Boolean;
     Function ColorToRtf(Const inColor: TColor): String;
     Function GetAsRTF: String;
+    Function GetIsCached: Boolean;
     Function RTFEscape(Const inString: String): String;
   public
+    Constructor Create(Const inUseCache: Boolean = True); ReIntroduce;
     Property AsString: String Read _diff Write _diff;
     Property AsRTF: String Read GetAsRTF;
+    Property IsCached: Boolean Read GetIsCached;
   End;
 
 Function AEGitDiffRTFColors: TAEGitDiffRTFColors;
@@ -82,6 +86,18 @@ End;
 //
 // TAEGitDiff
 //
+
+Constructor TAEGitDiff.Create(Const inUseCache: Boolean = True);
+Begin
+  inherited Create;
+
+  _usecache := inUseCache;
+End;
+
+Function TAEGitDiff.GetIsCached: Boolean;
+Begin
+  Result := _usecache And Not _diff.IsEmpty;
+End;
 
 Function TAEGitDiff.ColorToRtf(Const inColor: TColor): String;
 Var

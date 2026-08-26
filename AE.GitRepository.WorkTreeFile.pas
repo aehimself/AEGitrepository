@@ -10,28 +10,19 @@ Unit AE.GitRepository.WorkTreeFile;
 
 Interface
 
-Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Context, AE.GitRepository.Diff;
+Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Context;
 
 Type
   TAEGitWorkTreeFile = Class(TAEGitRepositoryFile)
-  strict private
-    _stageddiff: TAEGitDiff;
-    Procedure SetStatus(Const inStatus: TArray<TAEGitFileStatus>);
-    Function GetStagedDiff: TAEGitDiff;
-    Function GetStatus: TArray<TAEGitFileStatus>;
   strict protected
-    Function GetDiff: TAEGitDiff; Override;
+    Function CacheDiffs: Boolean; Override;
     Function GetDiffString: String; Override;
     Function GetOriginalContent: String; Override;
     Function InternalGetOriginalContent: String; Override;
   public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String); Override;
-    Destructor Destroy; Override;
     Procedure Revert;
     Procedure Stage;
     Procedure Unstage;
-    Property StagedDiff: TAEGitDiff Read GetStagedDiff;
-    Property Status: TArray<TAEGitFileStatus> Read GetStatus Write SetStatus;
   End;
 
 Implementation
@@ -40,7 +31,7 @@ Uses libgit2, System.SysUtils;
 
 Function TAEGitWorkTreeFile.GetDiffString: String;
 Begin
-  Result := Self.GetPatchFromWorkTree([Self.GitPath], False);
+  Result := Self.GetPatchFromWorkTree([Self.GitPath], Self.Status In AEGITSTAGEDFILESTATUSES);
 End;
 
 Function TAEGitWorkTreeFile.GetOriginalContent: String;
@@ -72,47 +63,14 @@ Begin
   End;
 End;
 
-Constructor TAEGitWorkTreeFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String);
+Function TAEGitWorkTreeFile.CacheDiffs: Boolean;
 Begin
-  inherited;
-
-  _stageddiff := TAEGitDiff.Create;
-End;
-
-Destructor TAEGitWorkTreeFile.Destroy;
-Begin
-  FreeAndNil(_stageddiff);
-
-  inherited;
-End;
-
-Function TAEGitWorkTreeFile.GetDiff: TAEGitDiff;
-Begin
-  Result := inherited;
-
-  Result.AsString := Self.GetDiffString;
-End;
-
-Function TAEGitWorkTreeFile.GetStagedDiff: TAEGitDiff;
-Begin
-  _stageddiff.AsString := Self.GetPatchFromWorkTree([Self.GitPath], True);
-
-  Result := _stageddiff;
-End;
-
-Function TAEGitWorkTreeFile.GetStatus: TArray<TAEGitFileStatus>;
-Begin
-  Result := Self.InternalStatus;
+  Result := False;
 End;
 
 Procedure TAEGitWorkTreeFile.Revert;
 Begin
   Context.RevertFile(Self.GitPath);
-End;
-
-Procedure TAEGitWorkTreeFile.SetStatus(Const inStatus: TArray<TAEGitFileStatus>);
-Begin
-  Self.InternalStatus := inStatus;
 End;
 
 Procedure TAEGitWorkTreeFile.Stage;

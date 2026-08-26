@@ -11,16 +11,15 @@ Unit AE.GitRepository.WorkTree;
 Interface
 
 Uses AE.GitRepository.RefreshableObject, System.Generics.Collections, AE.GitRepository.TypeDef, AE.GitRepository.WorkTreeFile,
-     AE.GitRepository.Context, AE.GitRepository.ChangedFileList, AE.GitRepository.Diff;
+     AE.GitRepository.Context, AE.GitRepository.Diff;
 
 Type
   TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
-    _items: TObjectDictionary<String, TAEGitWorkTreeFile>;
+    _changedfiles: TObjectList<TAEGitWorkTreeFile>;
     _patch: TAEGitDiff;
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Function GetFileNames: TArray<String>;
-    Function GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
   strict protected
     Procedure InternalClear; Override;
     Procedure InternalRefresh; Override;
@@ -32,9 +31,9 @@ Type
     Procedure RevertFiles(Const inFileNames: TArray<String>);
     Procedure StageFiles(Const inFileNames: TArray<String>);
     Procedure UnstageFiles(Const inFileNames: TArray<String>);
+    Function Files(Const inGitPath: String = ''): TArray<TAEGitWorkTreeFile>;
     Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
-    Property Files[Const inGitPath: String]: TAEGitWorkTreeFile Read GetFile;
   End;
 
 Implementation
@@ -45,13 +44,13 @@ Constructor TAEGitWorkTree.Create(Const inContext: TAEGitRepositoryContext);
 Begin
   inherited;
 
-  _items := TObjectDictionary<String, TAEGitWorkTreeFile>.Create([doOwnsValues]);
+  _changedfiles := TObjectList<TAEGitWorkTreeFile>.Create;
   _patch := TAEGitDiff.Create;
 End;
 
 Destructor TAEGitWorkTree.Destroy;
 Begin
-  FreeAndNil(_items);
+  FreeAndNil(_changedfiles);
   FreeAndNil(_patch);
 
   inherited;
@@ -59,7 +58,9 @@ End;
 
 Procedure TAEGitWorkTree.InternalClear;
 Begin
-  _items.Clear;
+  inherited;
+
+  _changedfiles.Clear;
 End;
 
 Procedure TAEGitWorkTree.Commit(Const inCommitMessage: String);
@@ -142,21 +143,45 @@ Begin
 End;
 
 Function TAEGitWorkTree.GetFileNames: TArray<String>;
+Var
+  names: TList<String>;
+  wtfile: TAEGitWorkTreeFile;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items.Keys.ToArray;
+  names := TList<String>.Create;
+  Try
+    For wtfile In _changedfiles Do
+      If Not names.Contains(wtfile.GitPath) Then
+        names.Add(wtfile.GitPath);
+
+    Result := names.ToArray;
+  Finally
+    FreeAndNil(names);
+  End;
 
   TArray.Sort<String>(Result);
 End;
 
-Function TAEGitWorkTree.GetFile(Const inGitPath: String): TAEGitWorkTreeFile;
+Function TAEGitWorkTree.Files(Const inGitPath: String = ''): TArray<TAEGitWorkTreeFile>;
+Var
+  results: TList<TAEGitWorkTreeFile>;
+  wtfile: TAEGitWorkTreeFile;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inGitPath];
+  results := TList<TAEGitWorkTreeFile>.Create;
+  Try
+    For wtfile In _changedfiles Do
+      If inGitPath.IsEmpty Or (wtfile.GitPath = inGitPath) Then
+        results.Add(wtfile);
+
+    Result := results.ToArray;
+  Finally
+    FreeAndNil(results);
+  End;
 End;
 
 Procedure TAEGitWorkTree.ApplyPatch(Const inPatch: String);
@@ -193,40 +218,43 @@ End;
 Procedure TAEGitWorkTree.InternalRefresh;
 Var
   changedfiles: TAEGitChangedFileList;
-  remove: TList<String>;
-  pair: TPair<String, TArray<TAEGitFileStatus>>;
-  wtf: TAEGitWorkTreeFile;
-  key: String;
+  toremove: TList<TAEGitWorkTreeFile>;
+  pair: TPair<String, TAEGitFileStatus>;
+  existing: TAEGitWorkTreeFile;
+  found: Boolean;
 Begin
   Self.Loaded := False;
 
   changedfiles := TAEGitChangedFileList.Create;
   Try
-    remove := TList<String>.Create;
+    toremove := TList<TAEGitWorkTreeFile>.Create;
     Try
       GetChangedFiles(changedfiles);
 
-      For key In _items.Keys Do
-        remove.Add(key);
+      toremove.AddRange(_changedfiles);
 
       For pair In changedfiles Do
       Begin
-        If Not _items.TryGetValue(pair.Key, wtf) Then
-        Begin
-          wtf := TAEGitWorkTreeFile.Create(Context, pair.Key);
+        found := False;
 
-          _items.Add(pair.Key, wtf);
-        End;
+        For existing In toremove Do
+          If (existing.GitPath = pair.Key) And (existing.Status = pair.Value) Then
+          Begin
+            toremove.Remove(existing);
 
-        wtf.Status := pair.Value;
+            found := True;
 
-        remove.Remove(pair.Key);
+            Break;
+          End;
+
+        If Not found Then
+          _changedfiles.Add(TAEGitWorkTreeFile.Create(Context, pair.Key, pair.Value));
       End;
 
-      For key In remove Do
-        _items.Remove(key);
+      For existing In toremove Do
+        _changedfiles.Remove(existing);
     Finally
-      FreeAndNil(remove);
+      FreeAndNil(toremove);
     End;
   Finally
     FreeAndNil(changedfiles);
@@ -267,9 +295,9 @@ End;
 Procedure TAEGitWorkTree.StageFiles(Const inFileNames: TArray<String>);
 Var
   index: Pgit_index;
-  deleted: Boolean;
-  stat: TAEGitFileStatus;
   filename: String;
+  wtfile: TAEGitWorkTreeFile;
+  deleted: Boolean;
 Begin
   Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
   Try
@@ -277,8 +305,8 @@ Begin
     Begin
       deleted := False;
 
-      For stat In _items[filename].Status Do
-        If stat = gfsDeleted Then
+      For wtfile In Self.Files(filename) Do
+        If wtfile.Status = gfsDeleted Then
         Begin
           deleted := True;
 
