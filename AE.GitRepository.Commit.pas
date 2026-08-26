@@ -38,7 +38,6 @@ Type
     Function GetBranches: TArray<String>;
     Function GetDiff: TAEGitDiff;
     Function GetFileNames: TArray<String>;
-    Function GetFile(Const inGitPath: String): TAEGitCommitFile;
     Function GetCommitter: String;
     Function GetCommitterEmail: String;
     Function GetDateTime: TDateTime;
@@ -57,6 +56,7 @@ Type
     Procedure Clear;
     Procedure RemoveTag(Const inTag: String);
     Procedure Revert(inRevertCommitMessage: String = '');
+    Function Files(Const inGitPath: String = ''): TArray<TAEGitCommitFile>;
     Property Author: String Read GetAuthor;
     Property AuthorEmail: String Read GetAuthorEmail;
     Property Branches: TArray<String> Read GetBranches;
@@ -67,7 +67,6 @@ Type
     Property Hash: String Read _hash;
     Property Head: Boolean Read GetHead;
     Property FileNames: TArray<String> Read GetFileNames;
-    Property Files[Const inGitPath: String]: TAEGitCommitFile Read GetFile; Default;
     Property Message: String Read GetMessage;
     Property ParentCommitHashes: TArray<String> Read GetParentCommitHashes;
     Property Summary: String Read GetSummary;
@@ -77,13 +76,13 @@ Type
   TAEGitCommits = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _branchname: String;
-    _items: TObjectDictionary<String, TAEGitCommit>;
+    _commits: TObjectDictionary<String, TAEGitCommit>;
     _lastheadhash: String;
     _order: TList<String>;
     Function RefreshFastForward(Const inRef: String): Boolean;
     Procedure RefreshFullReconcile(Const inRef: String);
     Function GetCommitHashes: TArray<String>;
-    Function GetItem(Const inCommitHash: String): TAEGitCommit;
+    Function GetCommit(Const inCommitHash: String): TAEGitCommit;
   strict protected
     Procedure InternalClear; Override;
     Procedure InternalRefresh; Override;
@@ -91,12 +90,12 @@ Type
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inBranchName: String); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Property CommitHashes: TArray<String> Read GetCommitHashes;
-    Property Items[Const inCommitHash: String]: TAEGitCommit Read GetItem; Default;
+    Property Commit[Const inCommitHash: String]: TAEGitCommit Read GetCommit; Default;
   End;
 
 Implementation
 
-Uses System.SysUtils, AE.GitRepository.TypeDef, System.DateUtils;
+Uses System.SysUtils, AE.GitRepository.TypeDef, AE.GitRepository.Exception, System.DateUtils;
 
 //
 // TAEGitCommit
@@ -271,7 +270,7 @@ Constructor TAEGitCommit.Create(Const inContext: TAEGitRepositoryContext; Const 
 Begin
   inherited Create(inContext);
 
-  _changedfiles := TAEGitCommitFileList.Create([doOwnsValues]);
+  _changedfiles := TAEGitCommitFileList.Create;
   _diff := TAEGitDiff.Create;
 
   _hash := inHash;
@@ -312,11 +311,23 @@ Begin
 End;
 
 Function TAEGitCommit.GetFileNames: TArray<String>;
+Var
+  names: TList<String>;
+  cfile: TAEGitCommitFile;
 Begin
   If Not _changedfilesloaded Then
     Self.LoadFiles;
 
-  Result := _changedfiles.Keys.ToArray;
+  names := TList<String>.Create;
+  Try
+    For cfile In _changedfiles Do
+      If Not names.Contains(cfile.GitPath) Then
+        names.Add(cfile.GitPath);
+
+    Result := names.ToArray;
+  Finally
+    FreeAndNil(names);
+  End;
 
   TArray.Sort<String>(Result);
 End;
@@ -422,12 +433,24 @@ Begin
   Result := Context.CommitBranches(_hash);
 End;
 
-Function TAEGitCommit.GetFile(Const inGitPath: String): TAEGitCommitFile;
+Function TAEGitCommit.Files(Const inGitPath: String = ''): TArray<TAEGitCommitFile>;
+Var
+  results: TList<TAEGitCommitFile>;
+  cfile: TAEGitCommitFile;
 Begin
   If Not _changedfilesloaded Then
     Self.LoadFiles;
 
-  Result := _changedfiles[inGitPath];
+  results := TList<TAEGitCommitFile>.Create;
+  Try
+    For cfile In _changedfiles Do
+      If inGitPath.IsEmpty Or (cfile.GitPath = inGitPath) Then
+        results.Add(cfile);
+
+    Result := results.ToArray;
+  Finally
+    FreeAndNil(results);
+  End;
 End;
 
 Procedure TAEGitCommit.LoadDetails;
@@ -583,7 +606,7 @@ Begin
                   filestatus := gfsConflicted;
               End;
 
-              _changedfiles.Add(filename, TAEGitCommitFile.Create(Context, _hash, filename, filestatus));
+              _changedfiles.Add(TAEGitCommitFile.Create(Context, _hash, filename, filestatus));
             End;
         Finally
           git_diff_free(diff);
@@ -741,7 +764,9 @@ End;
 
 Procedure TAEGitCommits.InternalClear;
 Begin
-  _items.Clear;
+  inherited;
+
+  _commits.Clear;
   _order.Clear;
 
   _lastheadhash := '';
@@ -751,7 +776,7 @@ Constructor TAEGitCommits.Create(Const inContext: TAEGitRepositoryContext; Const
 Begin
   inherited Create(inContext);
 
-  _items := TObjectDictionary<String, TAEGitCommit>.Create([doOwnsValues]);
+  _commits := TObjectDictionary<String, TAEGitCommit>.Create([doOwnsValues]);
   _order := TList<String>.Create;
 
   _branchname := inBranchName;
@@ -759,18 +784,18 @@ End;
 
 Destructor TAEGitCommits.Destroy;
 Begin
-  FreeAndNil(_items);
+  FreeAndNil(_commits);
   FreeAndNil(_order);
 
   inherited;
 End;
 
-Function TAEGitCommits.GetItem(Const inCommitHash: String): TAEGitCommit;
+Function TAEGitCommits.GetCommit(Const inCommitHash: String): TAEGitCommit;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inCommitHash];
+  Result := _commits[inCommitHash];
 End;
 
 Function TAEGitCommits.GetCommitHashes: TArray<String>;
@@ -830,11 +855,11 @@ Begin
     Begin
       hash := newprefix[i];
 
-      If Not _items.TryGetValue(hash, commit) Then
+      If Not _commits.TryGetValue(hash, commit) Then
       Begin
         commit := TAEGitCommit.Create(Context, hash);
 
-        _items.Add(hash, commit);
+        _commits.Add(hash, commit);
       End;
 
       _order.Insert(0, hash);
@@ -857,7 +882,7 @@ Begin
   keystoremove := TList<String>.Create;
   Try
     _order.Clear;
-    keystoremove.AddRange(_items.Keys);
+    keystoremove.AddRange(_commits.Keys);
 
     Context.HandleLibGit2Output('git_revwalk_new', git_revwalk_new(@walk, Context.Repository));
     Try
@@ -871,11 +896,11 @@ Begin
       Begin
         hash := Context.OidToString(@oid);
 
-        If Not _items.TryGetValue(hash, commit) Then
+        If Not _commits.TryGetValue(hash, commit) Then
         Begin
           commit := TAEGitCommit.Create(Context, hash);
 
-          _items.Add(hash, commit);
+          _commits.Add(hash, commit);
         End;
 
         _order.Add(hash);
@@ -883,7 +908,7 @@ Begin
       End;
 
       For hash In keystoremove Do
-        _items.Remove(hash);
+        _commits.Remove(hash);
 
       Self.Loaded := True;
     Finally

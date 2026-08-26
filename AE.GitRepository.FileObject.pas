@@ -18,32 +18,38 @@ Type
     _diff: TAEGitDiff;
     _gitpath: String;
     _originalcontent: String;
-    _status: TArray<TAEGitFileStatus>;
+    _status: TAEGitFileStatus;
   strict protected
+    Function CacheDiffs: Boolean; Virtual;
     Function GetDiff: TAEGitDiff; Virtual;
     Function GetDiffString: String; Virtual; Abstract;
     Function GetOriginalContent: String; Virtual;
     Function InternalGetOriginalContent: String; Virtual; Abstract;
-    Property InternalStatus: TArray<TAEGitFileStatus> Read _status Write _status;
   public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String); ReIntroduce; Virtual;
+    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
     Destructor Destroy; Override;
     Property Diff: TAEGitDiff Read GetDiff;
     Property GitPath: String Read _gitpath;
     Property OriginalContent: String Read GetOriginalContent;
+    Property Status: TAEGitFileStatus Read _status;
   End;
 
 Implementation
 
 Uses System.SysUtils;
 
-Constructor TAEGitRepositoryFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String);
+Constructor TAEGitRepositoryFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus);
 Begin
   inherited Create(inContext);
 
-  _diff := TAEGitDiff.Create;
+  _diff := TAEGitDiff.Create(Self.CacheDiffs);
   _gitpath := inGitPath;
-  _status := [];
+  _status := inStatus;
+End;
+
+Function TAEGitRepositoryFile.CacheDiffs: Boolean;
+Begin
+  Result := True;
 End;
 
 Destructor TAEGitRepositoryFile.Destroy;
@@ -55,7 +61,7 @@ End;
 
 Function TAEGitRepositoryFile.GetDiff: TAEGitDiff;
 Begin
-  If _diff.AsString.IsEmpty Then
+  If Not _diff.IsCached Then
     _diff.AsString := Self.GetDiffString;
 
   Result := _diff;

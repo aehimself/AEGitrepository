@@ -46,13 +46,13 @@ Type
 
   TAEGitBranches = Class(TAEGitRepositoryRefreshableObject)
   strict private
+    _branches: TObjectDictionary<String, TAEGitBranch>;
     _current: TAEGitHeadTarget;
     _currentowned: Boolean;
-    _items: TObjectDictionary<String, TAEGitBranch>;
     _order: TList<String>;
     Procedure FreeCurrent;
     Function GetCurrent: TAEGitHeadTarget;
-    Function GetItem(Const inBranchName: String): TAEGitBranch;
+    Function GetBranch(Const inBranchName: String): TAEGitBranch;
     Function GetNames: TArray<String>;
   strict protected
     Procedure InternalClear; Override;
@@ -64,7 +64,7 @@ Type
     Procedure UpdateCurrent;
     Property Current: TAEGitHeadTarget Read GetCurrent;
     Property Names: TArray<String> Read GetNames;
-    Property Items[Const inBranchName: String]: TAEGitBranch Read GetItem; Default;
+    Property Branch[Const inBranchName: String]: TAEGitBranch Read GetBranch; Default;
   End;
 
 Implementation
@@ -972,16 +972,18 @@ End;
 
 Procedure TAEGitBranches.InternalClear;
 Begin
+  inherited;
+
   Self.FreeCurrent;
 
-  _items.Clear;
+  _branches.Clear;
 End;
 
 Constructor TAEGitBranches.Create(Const inContext: TAEGitRepositoryContext);
 Begin
   inherited;
 
-  _items := TObjectDictionary<String, TAEGitBranch>.Create([doOwnsValues]);
+  _branches := TObjectDictionary<String, TAEGitBranch>.Create([doOwnsValues]);
   _order := TList<String>.Create;
 End;
 
@@ -989,8 +991,8 @@ Destructor TAEGitBranches.Destroy;
 Begin
   Self.FreeCurrent;
 
+  FreeAndNil(_branches);
   FreeAndNil(_order);
-  FreeAndNil(_items);
 
   inherited;
 End;
@@ -1033,7 +1035,7 @@ Begin
   End;
 
   If Self.Loaded Then
-    _items.Add(inBranchName, TAEGitBranch.Create(Context, inBranchName));
+    _branches.Add(inBranchName, TAEGitBranch.Create(Context, inBranchName));
 End;
 
 Function TAEGitBranches.GetCurrent: TAEGitHeadTarget;
@@ -1044,12 +1046,12 @@ Begin
   Result := _current;
 End;
 
-Function TAEGitBranches.GetItem(Const inBranchName: String): TAEGitBranch;
+Function TAEGitBranches.GetBranch(Const inBranchName: String): TAEGitBranch;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inBranchName];
+  Result := _branches[inBranchName];
 End;
 
 Function TAEGitBranches.GetNames: TArray<String>;
@@ -1107,15 +1109,15 @@ Begin
   Try
     _order.Clear;
 
-    keystoremove.AddRange(_items.Keys);
+    keystoremove.AddRange(_branches.Keys);
 
     For name In names Do
     Begin
-      If Not _items.TryGetValue(name, branch) Then
+      If Not _branches.TryGetValue(name, branch) Then
       Begin
         branch := TAEGitBranch.Create(Context, name);
 
-        _items.Add(name, branch);
+        _branches.Add(name, branch);
       End
       Else
         branch.Commits.Refresh(False);
@@ -1126,7 +1128,7 @@ Begin
     End;
 
     For name In keystoremove Do
-      _items.Remove(name);
+      _branches.Remove(name);
   Finally
     FreeAndNil(keystoremove);
   End;
@@ -1162,8 +1164,8 @@ Begin
       If Not Self.Loaded Then
         Self.Refresh;
 
-      If _items.ContainsKey(name) Then
-        _current := _items[name]
+      If _branches.ContainsKey(name) Then
+        _current := _branches[name]
       Else
       Begin
         _current := TAEGitBranch.Create(Context, name);

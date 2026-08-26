@@ -10,7 +10,7 @@ Unit AE.GitRepository.Context;
 
 Interface
 
-Uses libgit2, AE.GitRepository.TypeDef, AE.GitRepository.Settings, AE.GitRepository.ChangedFileList;
+Uses libgit2, AE.GitRepository.TypeDef, AE.GitRepository.Settings;
 
 Type
   TAEGitRepositoryContext = Class
@@ -335,49 +335,49 @@ Begin
         Continue;
 
       If (status.status And GIT_STATUS_INDEX_NEW) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedNew));
 
       If (status.status And GIT_STATUS_INDEX_MODIFIED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedModified));
 
       If (status.status And GIT_STATUS_INDEX_DELETED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.old_file.path)), gfsStagedDeleted));
 
       If (status.status And GIT_STATUS_INDEX_RENAMED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedRenamed));
 
       If (status.status And GIT_STATUS_INDEX_TYPECHANGE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsStagedTypeChange));
 
       If (status.status And GIT_STATUS_WT_NEW) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsNew));
 
       If (status.status And GIT_STATUS_WT_MODIFIED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsModified));
 
       If (status.status And GIT_STATUS_WT_DELETED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.old_file.path)), gfsDeleted));
 
       If (status.status And GIT_STATUS_WT_RENAMED) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsRenamed));
 
       If (status.status And GIT_STATUS_WT_TYPECHANGE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsTypeChange));
 
       If (status.status And GIT_STATUS_WT_UNREADABLE) <> 0 Then
-        inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable);
+        inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsUnreadable));
 
       If (status.status And GIT_STATUS_CONFLICTED) <> 0 Then
         If Assigned(status.index_to_workdir) Then
-          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted)
+          inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsConflicted))
         Else
-          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted);
+          inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsConflicted));
 
       If status.status = GIT_STATUS_CURRENT Then
         If Assigned(status.index_to_workdir) Then
-          inChangedFiles.AddFileStatus(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent)
+          inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.index_to_workdir.new_file.path)), gfsCurrent))
         Else
-          inChangedFiles.AddFileStatus(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent);
+          inChangedFiles.Add(TPair<String, TAEGitFileStatus>.Create(String(UTF8String(status.head_to_index.new_file.path)), gfsCurrent));
     End;
   Finally
     git_status_list_free(statuslist);
@@ -390,8 +390,7 @@ Procedure TAEGitRepositoryContextHelper.AssertCleanWorkTree;
 Var
   changedfiles: TAEGitChangedFileList;
   paths: TList<String>;
-  filestatus: TAEGitFileStatus;
-  hasblocking: Boolean;
+  pair: TPair<String, TAEGitFileStatus>;
   s, pathsummary: String;
 Begin
   changedfiles := TAEGitChangedFileList.Create;
@@ -400,28 +399,16 @@ Begin
 
     paths := TList<String>.Create;
     Try
-      For s In changedfiles.Keys Do
-      Begin
-        hasblocking := False;
-
-        For filestatus In changedfiles[s] Do
-          If Not (filestatus In [gfsCurrent, gfsIgnored]) Then
-          Begin
-            hasblocking := True;
-
-            Break;
-          End;
-
-        If hasblocking Then
-          paths.Add(s);
-      End;
+      For pair In changedfiles Do
+        If Not (pair.Value In [gfsCurrent, gfsIgnored]) And Not paths.Contains(pair.Key) Then
+          paths.Add(pair.Key);
 
       If paths.Count = 0 Then
         Exit;
 
       pathsummary := '';
 
-      For s in paths Do
+      For s In paths Do
         pathsummary := pathsummary + s + ', ';
 
       If Not pathsummary.IsEmpty Then

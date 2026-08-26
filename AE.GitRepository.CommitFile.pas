@@ -22,7 +22,7 @@ Type
     Constructor Create(Const inContext: TAEGitRepositoryContext; Const inCommitHash, inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
   End;
 
-  TAEGitCommitFileList = Class(TObjectDictionary<String, TAEGitCommitFile>);
+  TAEGitCommitFileList = Class(TObjectList<TAEGitCommitFile>);
 
 Implementation
 

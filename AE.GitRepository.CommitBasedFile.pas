@@ -14,27 +14,15 @@ Uses AE.GitRepository.FileObject, AE.GitRepository.TypeDef, AE.GitRepository.Con
 
 Type
   TAEGitCommitBasedFile = Class(TAEGitRepositoryFile)
-  strict private
-    Function GetStatus: TAEGitFileStatus;
   strict protected
     Function GetCommit(Const inRepository: Pgit_repository): Pgit_commit; Virtual; Abstract;
     Function GetDiffString: String; Override;
     Function InternalGetOriginalContent: String; Override;
-  public
-    Constructor Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus); ReIntroduce; Virtual;
-    Property Status: TAEGitFileStatus Read GetStatus;
   End;
 
 Implementation
 
 Uses System.SysUtils;
-
-Constructor TAEGitCommitBasedFile.Create(Const inContext: TAEGitRepositoryContext; Const inGitPath: String; Const inStatus: TAEGitFileStatus);
-Begin
-  inherited Create(inContext, inGitPath);
-
-  Self.InternalStatus := [inStatus];
-End;
 
 Function TAEGitCommitBasedFile.GetDiffString: String;
 Var
@@ -89,11 +77,6 @@ Begin
 
     Context.DoLibGit2Call('git_commit_free');
   End;
-End;
-
-Function TAEGitCommitBasedFile.GetStatus: TAEGitFileStatus;
-Begin
-  Result := Self.InternalStatus[0];
 End;
 
 End.

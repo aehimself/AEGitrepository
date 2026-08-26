@@ -10,7 +10,7 @@ Unit AE.GitRepository.TypeDef;
 
 Interface
 
-Uses libgit2;
+Uses libgit2, System.Generics.Collections;
 
 Type
   TAEGitErrorCode = (
@@ -124,10 +124,15 @@ Type
 
   TAEGitBranchType = ( gbLocal, gbRemote, gbAll );
 
+  // Flat list of (git path, status) pairs; the same path may appear more than once for distinct statuses
+  TAEGitChangedFileList = TList<TPair<String, TAEGitFileStatus>>;
+
 Const
   AEGITFILESTATUSSTR: Array[TAEGitFileStatus] Of String = ('Current', 'New', 'Modified', 'Deleted', 'Renamed',
     'Type change', 'New', 'Modified', 'Deleted', 'Type change', 'Renamed', 'Unreadable', 'Ignored', 'Conflicted',
     'Copied', 'Untracked');
+
+  AEGITSTAGEDFILESTATUSES: Set Of TAEGitFileStatus = [gfsStagedNew, gfsStagedModified, gfsStagedDeleted, gfsStagedRenamed, gfsStagedTypeChange];
 
 Function AEGitErrorDescription(Const inErrorCode: TAEGitErrorCode): String;
 Function AEGitErrorClassDescription(Const inErrorClass: TAEGitErrorClass): String;

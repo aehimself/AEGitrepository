@@ -22,9 +22,9 @@ Type
   TAEGitRemotes = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _default: TAEGitRemote;
-    _items: TObjectDictionary<String, TAEGitRemote>;
+    _remotes: TObjectDictionary<String, TAEGitRemote>;
     Function GetDefault: TAEGitRemote;
-    Function GetItem(Const inRemoteName: String): TAEGitRemote;
+    Function GetRemote(Const inRemoteName: String): TAEGitRemote;
     Function GetNames: TArray<String>;
   strict protected
     Procedure InternalClear; Override;
@@ -34,7 +34,7 @@ Type
     Destructor Destroy; Override;
     Procedure New(Const inName, inURL: String);
     Property Default: TAEGitRemote Read GetDefault;
-    Property Items[Const inRemoteName: String]: TAEGitRemote Read GetItem; Default;
+    Property Remote[Const inRemoteName: String]: TAEGitRemote Read GetRemote; Default;
     Property Names: TArray<String> Read GetNames;
   End;
 
@@ -142,12 +142,12 @@ Constructor TAEGitRemotes.Create(Const inContext: TAEGitRepositoryContext);
 Begin
   inherited;
 
-  _items := TObjectDictionary<String, TAEGitRemote>.Create([doOwnsValues]);
+  _remotes := TObjectDictionary<String, TAEGitRemote>.Create([doOwnsValues]);
 End;
 
 Destructor TAEGitRemotes.Destroy;
 Begin
-  FreeAndNil(_items);
+  FreeAndNil(_remotes);
 
   inherited;
 End;
@@ -160,12 +160,12 @@ Begin
   Result := _default;
 End;
 
-Function TAEGitRemotes.GetItem(Const inRemoteName: String): TAEGitRemote;
+Function TAEGitRemotes.GetRemote(Const inRemoteName: String): TAEGitRemote;
 Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items[inRemoteName];
+  Result := _remotes[inRemoteName];
 End;
 
 Function TAEGitRemotes.GetNames: TArray<String>;
@@ -173,7 +173,7 @@ Begin
   If Not Self.Loaded Then
     Self.Refresh;
 
-  Result := _items.Keys.ToArray;
+  Result := _remotes.Keys.ToArray;
 
   TArray.Sort<String>(Result);
 End;
@@ -182,7 +182,7 @@ Procedure TAEGitRemotes.InternalClear;
 Begin
   inherited;
 
-  _items.Clear;
+  _remotes.Clear;
 
   _default := nil;
 End;
@@ -201,7 +201,7 @@ Begin
   Try
     keystoremove := TList<String>.Create;
     Try
-      keystoremove.AddRange(_items.Keys.ToArray);
+      keystoremove.AddRange(_remotes.Keys.ToArray);
       p := remotes.strings;
 
       For a := 0 To remotes.Count - 1 Do
@@ -219,13 +219,13 @@ Begin
           Context.DoLibGit2Call('git_remote_free');
         End;
 
-        If Not _items.TryGetValue(remotename, aeremote) Or (aeremote.URL <> remoteurl) Then
+        If Not _remotes.TryGetValue(remotename, aeremote) Or (aeremote.URL <> remoteurl) Then
         Begin
           If Assigned(aeremote) Then
-            _items.Remove(remotename);
+            _remotes.Remove(remotename);
 
           aeremote := TAEGitRemote.Create(Context, remotename, remoteurl);
-          _items.Add(remotename, aeremote)
+          _remotes.Add(remotename, aeremote)
         End
         Else
           keystoremove.Remove(remotename);
@@ -237,7 +237,7 @@ Begin
       End;
 
       For remotename In keystoremove Do
-        _items.Remove(remotename);
+        _remotes.Remove(remotename);
     Finally
       FreeAndNil(keystoremove);
     End;
@@ -261,7 +261,7 @@ Begin
   Context.DoLibGit2Call('git_remote_free');
 
   If Self.Loaded Then
-    _items.Add(inName, TAEGitRemote.Create(Context, inName, inURL));
+    _remotes.Add(inName, TAEGitRemote.Create(Context, inName, inURL));
 End;
 
 End.
