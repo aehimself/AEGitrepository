@@ -505,7 +505,7 @@ Function TAEGitRepositoryBase.SolveConflicts: Boolean;
 Var
   index: Pgit_index;
   iterator: Pgit_index_conflict_iterator;
-  ancestor, ours, theirs: Pgit_index_entry;
+  ancestor, ours, theirs, touse: Pgit_index_entry;
   mergeresult: git_merge_file_result;
   hasconflicts: Boolean;
   logcode: TAEGitErrorCode;
@@ -532,21 +532,28 @@ Begin
     Try
       While HandleLibGit2Output('git_index_conflict_next', git_index_conflict_next(@ancestor, @ours, @theirs, iterator), [geIterationOver]) Do
       Begin
+        If Assigned(ours) Then
+          touse := ours
+        Else If Assigned(theirs) Then
+          touse := theirs
+        Else
+          touse := ancestor;
+
         HandleLibGit2Output('git_merge_file_from_index', git_merge_file_from_index(@mergeresult, _repo, ancestor, ours, theirs, nil));
         Try
           Result := mergeresult.automergeable <> 0;
 
           If Result Then
           Begin
-            TFile.WriteAllText(String(UTF8String(ours^.path)), String(UTF8String(mergeresult.ptr)));
+            TFile.WriteAllText(String(UTF8String(touse^.path)), String(UTF8String(mergeresult.ptr)));
 
-            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, ours^.path));
+            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, touse^.path));
 
             HandleLibGit2Output('git_index_write', git_index_write(index));
           End
-          Else If ResolveConflictsManually(String(UTF8String(ours^.path)), String(UTF8String(mergeresult.ptr))) Then
+          Else If ResolveConflictsManually(String(UTF8String(touse^.path)), String(UTF8String(mergeresult.ptr))) Then
           Begin
-            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, ours^.path));
+            HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, touse^.path));
 
             HandleLibGit2Output('git_index_write', git_index_write(index));
           End;
