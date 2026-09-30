@@ -62,7 +62,10 @@ End;
 Function TAEGitRepositoryFile.GetDiff: TAEGitDiff;
 Begin
   If Not _diff.IsCached Then
+  Begin
     _diff.AsString := Self.GetDiffString;
+    _diff.FullContent := Self.OriginalContent;
+  End;
 
   Result := _diff;
 End;

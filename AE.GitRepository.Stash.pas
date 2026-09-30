@@ -19,7 +19,7 @@ Type
     _hash: String;
     _changedfiles: TObjectList<TAEGitStashFile>;
     _message: String;
-    _patch: TAEGitDiff;
+    _patch: TAEMultipleGitDiff;
     Function GetFileNames: TArray<String>;
   strict protected
     Procedure InternalClear; Override;
@@ -30,7 +30,7 @@ Type
     Procedure Drop;
     Procedure Pop;
     Function Files(Const inGitPath: String = ''): TArray<TAEGitStashFile>;
-    Function GetPatch(Const inFileNames: TArray<String> = []): TAEGitDiff;
+    Function GetPatch(Const inFileNames: TArray<String> = []): TAEMultipleGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
     Property Hash: String Read _hash;
     Property Message: String Read _message Write _message;
@@ -73,7 +73,7 @@ Begin
   inherited Create(inContext);
 
   _changedfiles := TObjectList<TAEGitStashFile>.Create;
-  _patch := TAEGitDiff.Create;
+  _patch := TAEMultipleGitDiff.Create;
 
   _hash := inHash;
   _message := inMessage;
@@ -143,20 +143,29 @@ Begin
   TArray.Sort<String>(Result);
 End;
 
-Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): TAEGitDiff;
-var
+Function TAEGitStash.GetPatch(Const inFileNames: TArray<String> = []): TAEMultipleGitDiff;
+Var
   commit: Pgit_commit;
-begin
+  cfile: TAEGitStashFile;
+Begin
   commit := Context.GetStashCommit(_hash);
   Try
     _patch.AsString := Self.GetPatchFromCommit(commit, inFileNames, Context.Repository);
-
-    Result := _patch;
   Finally
     git_commit_free(commit);
 
     Context.DoLibGit2Call('git_commit_free');
   End;
+
+  _patch.FullContents.Clear;
+
+  // Staged entries hold the HEAD content; unstaged-only paths have index = HEAD
+  For cfile In Self.Files Do
+    If ((Length(inFileNames) = 0) Or TArray.Contains<String>(inFileNames, cfile.GitPath)) And
+      ((cfile.Status In AEGITSTAGEDFILESTATUSES) Or Not _patch.FullContents.ContainsKey(cfile.GitPath)) Then
+      _patch.FullContents.AddOrSetValue(cfile.GitPath, cfile.OriginalContent);
+
+  Result := _patch;
 End;
 
 Procedure TAEGitStash.Pop;
