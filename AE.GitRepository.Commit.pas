@@ -24,7 +24,7 @@ Type
     _committeremail: String;
     _datetime: TDateTime;
     _detailsloaded: Boolean;
-    _diff: TAEGitDiff;
+    _diff: TAEMultipleGitDiff;
     _hash: String;
     _message: String;
     _original_offset: Integer;
@@ -36,7 +36,7 @@ Type
     Function GetAuthor: String;
     Function GetAuthorEmail: String;
     Function GetBranches: TArray<String>;
-    Function GetDiff: TAEGitDiff;
+    Function GetDiff: TAEMultipleGitDiff;
     Function GetFileNames: TArray<String>;
     Function GetCommitter: String;
     Function GetCommitterEmail: String;
@@ -63,7 +63,7 @@ Type
     Property Committer: String Read GetCommitter;
     Property CommitterEmail: String Read GetCommitterEmail;
     Property DateTime: TDateTime Read GetDateTime;
-    Property Diff: TAEGitDiff Read GetDiff;
+    Property Diff: TAEMultipleGitDiff Read GetDiff;
     Property Hash: String Read _hash;
     Property Head: Boolean Read GetHead;
     Property FileNames: TArray<String> Read GetFileNames;
@@ -271,7 +271,7 @@ Begin
   inherited Create(inContext);
 
   _changedfiles := TAEGitCommitFileList.Create;
-  _diff := TAEGitDiff.Create;
+  _diff := TAEMultipleGitDiff.Create;
 
   _hash := inHash;
 
@@ -356,10 +356,11 @@ Begin
   Result := _datetime;
 End;
 
-Function TAEGitCommit.GetDiff: TAEGitDiff;
+Function TAEGitCommit.GetDiff: TAEMultipleGitDiff;
 Var
   commit: Pgit_commit;
   commitoid: git_oid;
+  cfile: TAEGitCommitFile;
 Begin
   Result := _diff;
 
@@ -376,6 +377,11 @@ Begin
 
     Context.DoLibGit2Call('git_commit_free');
   End;
+
+  _diff.FullContents.Clear;
+
+  For cfile In Self.Files Do
+    _diff.FullContents.AddOrSetValue(cfile.GitPath, cfile.OriginalContent);
 End;
 
 Function TAEGitCommit.GetHead: Boolean;

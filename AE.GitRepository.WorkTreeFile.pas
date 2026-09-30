@@ -45,8 +45,24 @@ Function TAEGitWorkTreeFile.InternalGetOriginalContent: String;
 Var
   index: Pgit_index;
   entry: Pgit_index_entry;
+  headtree: Pgit_object;
 Begin
   Result := '';
+
+  // Staged diffs are HEAD to index, unstaged ones are index to workdir
+  If Self.Status In AEGITSTAGEDFILESTATUSES Then
+  Begin
+    Context.HandleLibGit2Output('git_revparse_single', git_revparse_single(@headtree, Context.Repository, 'HEAD^{tree}'));
+    Try
+      Result := Self.GetFileContentFromTree(Pgit_tree(headtree), Self.GitPath, Context.Repository);
+    Finally
+      git_object_free(headtree);
+
+      Context.DoLibGit2Call('git_object_free');
+    End;
+
+    Exit;
+  End;
 
   Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
   Try

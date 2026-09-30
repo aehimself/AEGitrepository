@@ -17,7 +17,7 @@ Type
   TAEGitWorkTree = Class(TAEGitRepositoryRefreshableObject)
   strict private
     _changedfiles: TObjectList<TAEGitWorkTreeFile>;
-    _patch: TAEGitDiff;
+    _patch: TAEMultipleGitDiff;
     Procedure GetChangedFiles(Const inChangedFiles: TAEGitChangedFileList);
     Function GetFileNames: TArray<String>;
   strict protected
@@ -32,7 +32,7 @@ Type
     Procedure StageFiles(Const inFileNames: TArray<String>);
     Procedure UnstageFiles(Const inFileNames: TArray<String>);
     Function Files(Const inGitPath: String = ''): TArray<TAEGitWorkTreeFile>;
-    Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEGitDiff;
+    Function GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEMultipleGitDiff;
     Property FileNames: TArray<String> Read GetFileNames;
   End;
 
@@ -45,7 +45,7 @@ Begin
   inherited;
 
   _changedfiles := TObjectList<TAEGitWorkTreeFile>.Create;
-  _patch := TAEGitDiff.Create;
+  _patch := TAEMultipleGitDiff.Create;
 End;
 
 Destructor TAEGitWorkTree.Destroy;
@@ -208,9 +208,16 @@ Begin
   Context.RefreshWorkTree;
 End;
 
-Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEGitDiff;
+Function TAEGitWorkTree.GetPatch(Const inFileNames: TArray<String>; Const inStagedOnly: Boolean): TAEMultipleGitDiff;
+Var
+  cfile: TAEGitWorkTreeFile;
 Begin
   _patch.AsString := Self.GetPatchFromWorkTree(inFileNames, inStagedOnly);
+  _patch.FullContents.Clear;
+
+  For cfile In Self.Files Do
+    If ((cfile.Status In AEGITSTAGEDFILESTATUSES) = inStagedOnly) And ((Length(inFileNames) = 0) Or TArray.Contains<String>(inFileNames, cfile.GitPath)) Then
+      _patch.FullContents.AddOrSetValue(cfile.GitPath, cfile.OriginalContent);
 
   Result := _patch;
 End;

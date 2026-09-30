@@ -48,6 +48,14 @@ Var
 Begin
   Result := '';
 
+  // Staged diffs are HEAD (parent 0) to index (parent 1)
+  If Self.Status In AEGITSTAGEDFILESTATUSES Then
+  Begin
+    Result := inherited;
+
+    Exit;
+  End;
+
   If Self.Status In [gfsNew, gfsUntracked] Then
     Exit;
 
