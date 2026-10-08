@@ -200,7 +200,7 @@ End;
 Procedure TAECustomGitDiff.ApplyFilePatch(Const inLines: TArray<String>; Var ioLine: Integer; Const inOriginalContent: String; Const inOutput: TList<String>; Const inBookmarks: TList<NativeInt>);
 Var
   original: TArray<String>;
-  position, hunkstart, oldstart, oldcount, newstart, newcount, oldseen, newseen: Integer;
+  position, newposition, hunkstart, newhunkstart, oldstart, oldcount, newstart, newcount, oldseen, newseen: Integer;
   inchange: Boolean;
   parts: TArray<String>;
   line: String;
@@ -216,6 +216,7 @@ Begin
     original := line.Split([#10]);
 
   position := 0;
+  newposition := 0;
 
   While ioLine <= High(inLines) Do
   Begin
@@ -234,7 +235,8 @@ Begin
     parts := line.Split([' ']);
 
     If Not line.StartsWith('@@ ') Or (Length(parts) < 4) Or Not ParseHunkRange(parts[1], '-', oldstart, oldcount) Or
-      Not ParseHunkRange(parts[2], '+', newstart, newcount) Then
+      Not ParseHunkRange(parts[2], '+', newstart, newcount) Or (oldstart < 0) Or (newstart < 0) Or (oldcount < 0) Or (newcount < 0) Or
+      ((oldcount > 0) And (oldstart = 0)) Or ((newcount > 0) And (newstart = 0)) Then
       Raise EAEGitException.Create('Invalid diff: unexpected content at diff line ' + (ioLine + 1).ToString + '!');
 
     // A hunk removing nothing inserts after line oldstart
@@ -243,14 +245,23 @@ Begin
     Else
       hunkstart := oldstart - 1;
 
+    If newcount = 0 Then
+      newhunkstart := newstart
+    Else
+      newhunkstart := newstart - 1;
+
     If (hunkstart < position) Or (hunkstart + oldcount > Length(original)) Then
       Raise EAEGitException.Create('Diff can not be applied: hunk at diff line ' + (ioLine + 1).ToString + ' does not fit the original content!');
+
+    If (hunkstart - position) <> (newhunkstart - newposition) Then
+      Raise EAEGitException.Create('Diff can not be applied: hunk at diff line ' + (ioLine + 1).ToString + ' has an inconsistent new-file position!');
 
     While position < hunkstart Do
     Begin
       inOutput.Add(' ' + original[position]);
 
       Inc(position);
+      Inc(newposition);
     End;
 
     Inc(ioLine);
@@ -295,7 +306,10 @@ Begin
       End;
 
       If prefix <> '-' Then
+      Begin
         Inc(newseen);
+        Inc(newposition);
+      End;
 
       If (oldseen > oldcount) Or (newseen > newcount) Then
         Raise EAEGitException.Create('Invalid diff: hunk line counts do not match at diff line ' + ioLine.ToString + '!');
@@ -327,6 +341,7 @@ Begin
   parts := inRange.Substring(1).Split([',']);
 
   Result := (Length(parts) In [1, 2]) And TryStrToInt(parts[0], outStart) And ((Length(parts) = 1) Or TryStrToInt(parts[1], outCount));
+  Result := Result And (outStart >= 0) And (outCount >= 0);
 End;
 
 Function TAECustomGitDiff.ReadFileHeader(Const inLines: TArray<String>; Var ioLine: Integer; Out outIsNewFile: Boolean): String;
