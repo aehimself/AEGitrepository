@@ -866,9 +866,9 @@ Begin
         commit := TAEGitCommit.Create(Context, hash);
 
         _commits.Add(hash, commit);
-      End;
 
-      _order.Insert(0, hash);
+        _order.Insert(0, hash);
+      End;
     End;
 
     Result := True;
