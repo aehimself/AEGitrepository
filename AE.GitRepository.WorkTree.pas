@@ -273,6 +273,8 @@ End;
 Procedure TAEGitWorkTree.RevertFiles(Const inFileNames: TArray<String>);
 Var
   options: git_checkout_options;
+  index: Pgit_index;
+  entry: Pgit_index_entry;
   filenames: TArray<PAnsiChar>;
   utffilenames: TArray<UTF8String>;
   a: NativeInt;
@@ -293,6 +295,25 @@ Begin
   options.paths.strings := @filenames[0];
 
   Context.HandleLibGit2Output('git_checkout_tree', git_checkout_tree(Context.Repository, nil, @options));
+
+  Context.HandleLibGit2Output('git_repository_index', git_repository_index(@index, Context.Repository));
+  Try
+    For a := Low(inFileNames) To High(inFileNames) Do
+    Begin
+      entry := git_index_get_bypath(index, filenames[a], 0);
+
+      Context.DoLibGit2Call('git_index_get_bypath');
+
+      If Assigned(entry) Then
+        Context.HandleLibGit2Output('git_index_add_bypath', git_index_add_bypath(index, filenames[a]));
+    End;
+
+    Context.HandleLibGit2Output('git_index_write', git_index_write(index));
+  Finally
+    git_index_free(index);
+
+    Context.DoLibGit2Call('git_index_free');
+  End;
 
   Self.Refresh(False);
 

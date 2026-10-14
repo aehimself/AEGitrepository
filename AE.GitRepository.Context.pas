@@ -314,7 +314,7 @@ Var
 Begin
   HandleLibGit2Output('git_status_options_init', git_status_options_init(@options, GIT_STATUS_OPTIONS_VERSION));
 
-  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS;
+  options.flags := GIT_STATUS_OPT_INCLUDE_UNTRACKED Or GIT_STATUS_OPT_RECURSE_UNTRACKED_DIRS Or GIT_STATUS_OPT_UPDATE_INDEX;
 
   If inExcludeSubmodules Then
     options.flags := options.flags Or GIT_STATUS_OPT_EXCLUDE_SUBMODULES;
