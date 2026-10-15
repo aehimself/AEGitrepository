@@ -1,4 +1,4 @@
-# AEGitrepository Experimental
+# AEGitrepository
 
 TAEGitRepository is a wrapper class to perform basic functionality on local Git repositories with libgit2 in an easy way. You don't need Git to be installed, just build and ship git2.dll with your application and you are good to go!
 There are two external components you need to make use of TAEGitRepository.
