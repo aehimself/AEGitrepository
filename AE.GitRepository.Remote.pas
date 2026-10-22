@@ -68,6 +68,7 @@ Procedure TAEGitRemote.Delete;
 Begin
   Context.HandleLibGit2Output('git_remote_delete', git_remote_delete(Context.Repository, PAnsiChar(UTF8String(_name))));
 
+  Context.RefreshBranches;
   Context.RefreshRemotes;
 End;
 
@@ -86,6 +87,8 @@ Begin
     Context.HandleLibGit2Output('git_remote_connect', git_remote_connect(remote, GIT_DIRECTION_FETCH, @callbacks, nil, nil));
     Try
       Context.HandleLibGit2Output('git_remote_prune', git_remote_prune(remote, @callbacks));
+
+      Context.RefreshBranches;
     Finally
       Context.HandleLibGit2Output('git_remote_disconnect', git_remote_disconnect(remote));
     End;
@@ -111,6 +114,7 @@ Begin
     _name := inName;
 
     Context.RefreshRemotes;
+    Context.RefreshBranches;
 
     If problems.Count > 0 Then
     Begin
@@ -195,12 +199,21 @@ Var
   a: Integer;
   remotename, remoteurl: String;
   aeremote: TAEGitRemote;
+  cachedremote: TPair<String, TAEGitRemote>;
   remote: Pgit_remote;
 Begin
   Context.HandleLibGit2Output('git_remote_list', git_remote_list(@remotes, Context.Repository));
   Try
     keystoremove := TList<String>.Create;
     Try
+      For cachedremote In _remotes.ToArray Do
+        If cachedremote.Key <> cachedremote.Value.Name Then
+        Begin
+          _remotes.ExtractPair(cachedremote.Key);
+          _remotes.Add(cachedremote.Value.Name, cachedremote.Value);
+        End;
+
+      _default := nil;
       keystoremove.AddRange(_remotes.Keys.ToArray);
       p := remotes.strings;
 
@@ -225,10 +238,10 @@ Begin
             _remotes.Remove(remotename);
 
           aeremote := TAEGitRemote.Create(Context, remotename, remoteurl);
-          _remotes.Add(remotename, aeremote)
-        End
-        Else
-          keystoremove.Remove(remotename);
+          _remotes.Add(remotename, aeremote);
+        End;
+
+        keystoremove.Remove(remotename);
 
         If Not Assigned(_default) Then
           _default := aeremote;
@@ -261,7 +274,12 @@ Begin
   Context.DoLibGit2Call('git_remote_free');
 
   If Self.Loaded Then
+  Begin
     _remotes.Add(inName, TAEGitRemote.Create(Context, inName, inURL));
+
+    If Not Assigned(_default) Then
+      _default := _remotes[inName];
+  End;
 End;
 
 End.
