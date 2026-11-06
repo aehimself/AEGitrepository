@@ -163,8 +163,7 @@ Begin
 
       If OidToString(git_reflog_entry_id_new(entry)).ToLower = inStashHash.ToLower Then
       Begin
-        // Reflog entries are stored in reverse order compared to stash indexes
-        Result := Integer(count - 1 - a);
+        Result := Integer(a);
 
         Break;
       End;
